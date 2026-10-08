@@ -11,8 +11,8 @@
 //   right button:  clear the drawing
 //   middle button: change the drawing color
 //
-// The mouse is expected in the SECOND gamepad port (id 1): select the
-// "v32io:mouse" joystick profile for Gamepad 2 in the emulator
+// The mouse is expected in the FOURTH gamepad port (id 3): select the
+// "v32io:mouse" joystick profile for Gamepad 4 in the emulator
 //
 #define DOTS_MAX  500
 #define COLORS      4
@@ -38,7 +38,7 @@ void main (void)
     palette[2]                = color_green;
     palette[3]                = color_yellow;
 
-    mouse                     = v32mouse_init (SECOND_GAMEPAD_PORT);
+    mouse                     = v32mouse_init (FOURTH_GAMEPAD_PORT);
 
     while (true)
     {

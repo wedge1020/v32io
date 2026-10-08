@@ -7,8 +7,8 @@
 //
 // v32kbd test program: type text on screen.
 //
-// The keyboard is expected in the SECOND gamepad port (id 1): in the
-// emulator, select "v32kbd" in menu Gamepads > Gamepad 2
+// The keyboard is expected in the FOURTH gamepad port (id 3): in the
+// emulator, select "v32kbd" in menu Gamepads > Gamepad 4
 //
 #define TEXT_MAX  600
 
@@ -22,7 +22,7 @@ void main (void)
     int [12]        sym;
     v32kbd         *keyboard  = NULL;
 
-    keyboard                  = v32kbd_init (SECOND_GAMEPAD_PORT);
+    keyboard                  = v32kbd_init (FOURTH_GAMEPAD_PORT);
     text[0]                   = 0;
 
     while (true)
