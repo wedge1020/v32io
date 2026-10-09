@@ -1,6 +1,6 @@
-diff -ruN a/Emulator/GUI.cpp b/Emulator/GUI.cpp
---- a/Emulator/GUI.cpp	2026-10-08 17:01:02.000000000 -0400
-+++ b/Emulator/GUI.cpp	2026-10-09 10:52:09.625782130 -0400
+diff -ruN --strip-trailing-cr ../orig_DesktopEmulator/Emulator/GUI.cpp DesktopEmulator/Emulator/GUI.cpp
+--- ../orig_DesktopEmulator/Emulator/GUI.cpp	2026-10-08 17:01:02.000000000 -0400
++++ DesktopEmulator/Emulator/GUI.cpp	2026-10-09 11:13:23.454481831 -0400
 @@ -1020,6 +1020,9 @@
      bool KeyboardIsUsed = (Gamepads.GetKeyboardGamepad() >= 0);
      bool V32KbdIsUsed   = (Gamepads.GetV32KbdGamepad()   >= 0);
@@ -110,10 +110,10 @@ diff -ruN a/Emulator/GUI.cpp b/Emulator/GUI.cpp
      ImGui::NewFrame();
      
      // show the main menu bar
-diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
---- a/Emulator/GamepadsInput.cpp	2026-10-08 17:01:02.000000000 -0400
-+++ b/Emulator/GamepadsInput.cpp	2026-10-09 10:52:09.623977314 -0400
-@@ -4,11 +4,16 @@
+diff -ruN --strip-trailing-cr ../orig_DesktopEmulator/Emulator/GamepadsInput.cpp DesktopEmulator/Emulator/GamepadsInput.cpp
+--- ../orig_DesktopEmulator/Emulator/GamepadsInput.cpp	2026-10-08 17:01:02.000000000 -0400
++++ DesktopEmulator/Emulator/GamepadsInput.cpp	2026-10-09 11:13:23.478349808 -0400
+@@ -4,12 +4,17 @@
      
      // include infrastructure headers
      #include "DesktopInfrastructure/Logger.hpp"
@@ -124,12 +124,13 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +    #include "EmulatorControl.hpp"
      #include "GUI.hpp"
      #include "Globals.hpp"
-+
+     
 +    // include imgui headers
 +    #include <imgui/imgui.h>    // [ Dear ImGui ] Main header
-     
++    
      // include C/C++ headers
      #include <stdexcept>        // [ C++ STL ] Exceptions
+     #include <iostream>         // [ C++ STL ] I/O Streams
 @@ -112,6 +117,42 @@
  
  // -----------------------------------------------------------------------------
@@ -177,7 +178,7 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
      // command buttons are all initially unpressed
      for( int Gamepad = 0; Gamepad < Constants::GamepadPorts; Gamepad++ )
        CommandPressed[ Gamepad ] = false;
-+
++    
 +    // v32mouse starts not captured, with no pending input
 +    V32MouseCaptured = false;
 +    V32MouseCountsPerStep = V32Mouse::DefaultCountsPerStep;
@@ -190,45 +191,38 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
      bool IsKeyboardUsed = false;
      
 +    bool IsMouseUsed = false;
-+
++    
      // any change in devices discards pending v32kbd events; that
      // gamepad gets disconnected here so its controls are all reset
      V32KbdQueue.clear();
--    
-+
+     
 +    // the same applies to v32mouse (on reconnection its counters
 +    // will be back at rest, which is what programs expect)
 +    ClearV32MouseInput();
-+
++    
      // update mappings for gamepads
      for( int Gamepad = 0; Gamepad < Constants::GamepadPorts; Gamepad++ )
      {
-@@ -366,10 +418,26 @@
-                 IsKeyboardUsed = true;
-                 Console.SetGamepadConnection( Gamepad, true );
-             }
--            
-+
+@@ -370,6 +422,22 @@
              continue;
          }
--        
-+
+         
 +        if( GamepadDevice->Type == DeviceTypes::V32Mouse )
 +        {
 +            // there is a single host mouse: allow only 1 gamepad
 +            // to use it (it is independent of the keyboard)
 +            if( IsMouseUsed )
 +              GamepadDevice->Type = DeviceTypes::NoDevice;
-+
++            
 +            else
 +            {
 +                IsMouseUsed = true;
 +                Console.SetGamepadConnection( Gamepad, true );
 +            }
-+
++            
 +            continue;
 +        }
-+
++        
          // preemptively set an unused instance ID in case errors happen
          GamepadDevice->InstanceID = -1;
          
@@ -236,22 +230,17 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
              }
          }
      }
-+
++    
 +    // with no v32mouse in use, give the host mouse back
 +    if( !IsMouseUsed )
 +      ReleaseV32Mouse();
  }
  
  // -----------------------------------------------------------------------------
-@@ -413,7 +485,18 @@
-     for( int Gamepad = 0; Gamepad < Constants::GamepadPorts; Gamepad++ )
-       if( MappedGamepads[ Gamepad ].Type == DeviceTypes::V32Kbd )
-         return Gamepad;
--    
-+
-+    return -1;
-+}
-+
+@@ -417,6 +489,17 @@
+     return -1;
+ }
+ 
 +// -----------------------------------------------------------------------------
 +
 +int GamepadsInput::GetV32MouseGamepad()
@@ -259,10 +248,13 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +    for( int Gamepad = 0; Gamepad < Constants::GamepadPorts; Gamepad++ )
 +      if( MappedGamepads[ Gamepad ].Type == DeviceTypes::V32Mouse )
 +        return Gamepad;
++    
++    return -1;
++}
 +
-     return -1;
- }
  
+ // =============================================================================
+ //      GAMEPADS INPUT: V32KBD DEVICE
 @@ -482,6 +565,272 @@
  
  
@@ -277,19 +269,19 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +static int ReadV32MouseCounter( int Gamepad, const V32Mouse::CounterControls& Counter )
 +{
 +    int32_t* ControlStates = &Console.GamepadController.RealTimeGamepadStates[ Gamepad ].Left;
-+
++    
 +    bool NegativePressed = (ControlStates[ (int)Counter.Negative ] > 0);
 +    bool PositivePressed = (ControlStates[ (int)Counter.Positive ] > 0);
 +    bool HighPressed     = (ControlStates[ (int)Counter.High     ] > 0);
 +    bool LowPressed      = (ControlStates[ (int)Counter.Low      ] > 0);
-+
++    
 +    // Gray code to group: 00 -> 0, 01 -> 1, 11 -> 2, 10 -> 3
 +    int Group = HighPressed? (LowPressed? 2 : 3) : (LowPressed? 1 : 0);
-+
++    
 +    // trit: 0 = negative, 1 = none, 2 = positive
 +    // (the console never has both of them pressed)
 +    int Trit = NegativePressed? 0 : (PositivePressed? 2 : 1);
-+
++    
 +    // odd groups walk the trit backwards
 +    return 3 * Group + ((Group & 1)? 2 - Trit : Trit);
 +}
@@ -303,17 +295,17 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +    int Index = Position % 3;
 +    int Trit  = (Group & 1)? 2 - Index : Index;
 +    int Gray  = Group ^ (Group >> 1);
-+
++    
 +    Console.SetGamepadControl( Gamepad, Counter.High, (Gray & 2) != 0 );
 +    Console.SetGamepadControl( Gamepad, Counter.Low,  (Gray & 1) != 0 );
-+
++    
 +    // pressing a direction makes the console release the opposite one
 +    if( Trit == 0 )
 +      Console.SetGamepadControl( Gamepad, Counter.Negative, true );
-+
++    
 +    else if( Trit == 2 )
 +      Console.SetGamepadControl( Gamepad, Counter.Positive, true );
-+
++    
 +    else
 +    {
 +        Console.SetGamepadControl( Gamepad, Counter.Negative, false );
@@ -331,12 +323,12 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +    // kept for later frames, and it keeps the motion's direction
 +    int Steps = PendingMotion / CountsPerStep;
 +    Clamp( Steps, -V32Mouse::MaxStepsPerFrame, V32Mouse::MaxStepsPerFrame );
-+
++    
 +    if( Steps == 0 )
 +      return;
-+
++    
 +    PendingMotion -= Steps * CountsPerStep;
-+
++    
 +    int Position = ReadV32MouseCounter( Gamepad, Counter );
 +    Position = (Position + Steps + V32Mouse::Positions) % V32Mouse::Positions;
 +    WriteV32MouseCounter( Gamepad, Counter, Position );
@@ -348,7 +340,7 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    V32MousePendingX = 0;
 +    V32MousePendingY = 0;
-+
++    
 +    for( int Button = 0; Button < V32Mouse::ButtonsCount; Button++ )
 +    {
 +        V32MouseButtonQueues[ Button ].clear();
@@ -362,26 +354,26 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    // nothing to do when the device is not in use
 +    int Gamepad = GetV32MouseGamepad();
-+
++    
 +    if( Gamepad < 0 || !Console.HasGamepad( Gamepad ) )
 +    {
 +        ClearV32MouseInput();
 +        return;
 +    }
-+
++    
 +    // buttons: show at most 1 change per frame for each one, so that
 +    // a press and release within the same frame is never missed
 +    for( int Button = 0; Button < V32Mouse::ButtonsCount; Button++ )
 +    {
 +        deque< bool >& Queue = V32MouseButtonQueues[ Button ];
-+
++        
 +        if( Queue.empty() )
 +          continue;
-+
++        
 +        Console.SetGamepadControl( Gamepad, V32Mouse::ButtonControls[ Button ], Queue.front() );
 +        Queue.pop_front();
 +    }
-+
++    
 +    // movement: step both counters
 +    StepV32MouseCounter( Gamepad, V32Mouse::CounterX, V32MousePendingX, V32MouseCountsPerStep );
 +    StepV32MouseCounter( Gamepad, V32Mouse::CounterY, V32MousePendingY, V32MouseCountsPerStep );
@@ -400,10 +392,10 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    // the device must be in use
 +    int Gamepad = GetV32MouseGamepad();
-+
++    
 +    if( Gamepad < 0 || !Console.HasGamepad( Gamepad ) )
 +      return false;
-+
++    
 +    // and there must be a program running
 +    return Emulator.IsPowerOn();
 +}
@@ -414,7 +406,7 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    if( V32MouseCaptured )
 +      return;
-+
++    
 +    // relative mode hides the host pointer, keeps it within
 +    // our window and reports motion even past screen edges
 +    if( SDL_SetRelativeMouseMode( SDL_TRUE ) != 0 )
@@ -422,14 +414,14 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +        LOG( "v32mouse: cannot capture the mouse: " + string( SDL_GetError() ) );
 +        return;
 +    }
-+
++    
 +    LOG( "v32mouse: mouse captured" );
 +    V32MouseCaptured = true;
-+
++    
 +    // motion before the capture is not reported
 +    V32MousePendingX = 0;
 +    V32MousePendingY = 0;
-+
++    
 +    // the GUI is not shown while the mouse is captured
 +    MouseIsOnWindow = false;
 +}
@@ -440,23 +432,23 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    if( !V32MouseCaptured )
 +      return;
-+
++    
 +    SDL_SetRelativeMouseMode( SDL_FALSE );
 +    
 +    LOG( "v32mouse: mouse released" );
 +    V32MouseCaptured = false;
-+
++    
 +    // discard pending motion
 +    V32MousePendingX = 0;
 +    V32MousePendingY = 0;
-+
++    
 +    // buttons held at this point will not get their release events
 +    // reported, so programs need to see them released now
 +    for( int Button = 0; Button < V32Mouse::ButtonsCount; Button++ )
 +    {
 +        if( !V32MouseButtonTargets[ Button ] )
 +          continue;
-+
++        
 +        V32MouseButtonQueues[ Button ].push_back( false );
 +        V32MouseButtonTargets[ Button ] = false;
 +    }
@@ -478,11 +470,11 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +    // (and touch screens are not taken as a mouse)
 +    if( !V32MouseCaptured || Event.motion.which == SDL_TOUCH_MOUSEID )
 +      return;
-+
++    
 +    // if the program is not reading the counters fast enough,
 +    // discard the excess so that the pointer won't drift on
 +    int MaxPending = V32Mouse::MaxPendingSteps * V32MouseCountsPerStep;
-+
++    
 +    V32MousePendingX += Event.motion.xrel;
 +    V32MousePendingY += Event.motion.yrel;
 +    Clamp( V32MousePendingX, -MaxPending, MaxPending );
@@ -495,9 +487,9 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +{
 +    if( Event.button.which == SDL_TOUCH_MOUSEID )
 +      return;
-+
++    
 +    bool Pressed = (Event.type == SDL_MOUSEBUTTONDOWN);
-+
++    
 +    // when not captured, a left click on the game screen captures the
 +    // mouse. That click is not reported (its release is ignored too,
 +    // since the button was never shown as pressed). Clicks on the GUI
@@ -507,26 +499,26 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +        if( Pressed && Event.button.button == SDL_BUTTON_LEFT )
 +          if( V32MouseCanCapture() && !ImGui::GetIO().WantCaptureMouse )
 +            CaptureV32Mouse();
-+
++        
 +        return;
 +    }
-+
++    
 +    int Button = V32Mouse::GetButtonIndex( Event.button.button );
-+
++    
 +    if( Button < 0 )
 +      return;
-+
++    
 +    // ignore redundant changes
 +    if( Pressed == V32MouseButtonTargets[ Button ] )
 +      return;
-+
++    
 +    // if the program is not reading buttons, skip
 +    // to the latest state instead of growing the queue
 +    deque< bool >& Queue = V32MouseButtonQueues[ Button ];
-+
++    
 +    if( Queue.size() >= V32Mouse::MaxQueuedChanges )
 +      Queue.clear();
-+
++    
 +    Queue.push_back( Pressed );
 +    V32MouseButtonTargets[ Button ] = Pressed;
 +}
@@ -536,14 +528,11 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
  //      GAMEPADS INPUT: PROCESSING INPUT EVENTS
  // =============================================================================
  
-@@ -521,7 +870,18 @@
-             
-             else
+@@ -523,6 +872,17 @@
                ProcessKeyUp( Event );
--            
-+
-+            break;
-+
+             
+             break;
++        
 +        // the host mouse is only used by the v32mouse device
 +        case SDL_MOUSEMOTION:
 +            if( GetV32MouseGamepad() >= 0 )
@@ -553,12 +542,13 @@ diff -ruN a/Emulator/GamepadsInput.cpp b/Emulator/GamepadsInput.cpp
 +        case SDL_MOUSEBUTTONUP:
 +            if( GetV32MouseGamepad() >= 0 )
 +              ProcessV32MouseButton( Event );
-             break;
++            break;
      }
  }
-diff -ruN a/Emulator/GamepadsInput.hpp b/Emulator/GamepadsInput.hpp
---- a/Emulator/GamepadsInput.hpp	2026-10-08 17:01:02.000000000 -0400
-+++ b/Emulator/GamepadsInput.hpp	2026-10-09 10:52:09.624829044 -0400
+ 
+diff -ruN --strip-trailing-cr ../orig_DesktopEmulator/Emulator/GamepadsInput.hpp DesktopEmulator/Emulator/GamepadsInput.hpp
+--- ../orig_DesktopEmulator/Emulator/GamepadsInput.hpp	2026-10-08 17:01:02.000000000 -0400
++++ DesktopEmulator/Emulator/GamepadsInput.hpp	2026-10-09 11:13:23.481951169 -0400
 @@ -114,7 +114,8 @@
      NoDevice,
      Keyboard,       // a few keys mapped to gamepad controls
@@ -610,23 +600,23 @@ diff -ruN a/Emulator/GamepadsInput.hpp b/Emulator/GamepadsInput.hpp
 +{
 +    // positions in each counter cycle
 +    const int Positions = 12;
-+
++    
 +    // counter position when nothing is pressed
 +    const int RestPosition = 1;
-+
++    
 +    // most steps a counter can move in a single frame
 +    const int MaxStepsPerFrame = 5;
-+
++    
 +    // movement waiting to be sent over this many steps is discarded,
 +    // so that the pointer stops soon after the host mouse does
 +    const int MaxPendingSteps = 10;
-+
++    
 +    // host mouse motion units (raw counts in relative mode) that make
 +    // 1 step of a counter: lower values give a faster pointer
 +    const int DefaultCountsPerStep = 2;
 +    const int MinCountsPerStep = 1;
 +    const int MaxCountsPerStep = 16;
-+
++    
 +    // indices for the mouse buttons
 +    enum Buttons
 +    {
@@ -635,23 +625,23 @@ diff -ruN a/Emulator/GamepadsInput.hpp b/Emulator/GamepadsInput.hpp
 +        Button_Middle,
 +        ButtonsCount
 +    };
-+
++    
 +    // pending button changes over this limit are discarded
 +    const unsigned MaxQueuedChanges = 16;
-+
++    
 +    // gamepad control used to report each mouse button
 +    extern const V32::GamepadControls ButtonControls[ ButtonsCount ];
-+
++    
 +    // the 4 gamepad controls that make up a movement counter
 +    struct CounterControls
 +    {
 +        V32::GamepadControls Negative, Positive;    // trit
 +        V32::GamepadControls High, Low;             // Gray code
 +    };
-+
++    
 +    extern const CounterControls CounterX;
 +    extern const CounterControls CounterY;
-+
++    
 +    // converts SDL mouse buttons to our indices (-1 for unsupported ones)
 +    int GetButtonIndex( Uint8 SDLButton );
 +}
@@ -661,12 +651,10 @@ diff -ruN a/Emulator/GamepadsInput.hpp b/Emulator/GamepadsInput.hpp
  // full identification of a host computer device
  struct DeviceInfo
  {
-@@ -244,7 +330,21 @@
-         
+@@ -245,6 +331,20 @@
          // key events pending to be reported by the v32kbd device
          std::deque< V32KbdEvent > V32KbdQueue;
--        
-+
+         
 +        // v32mouse device: whether the host mouse is captured by it,
 +        // host mouse motion not yet sent (in host motion units), and
 +        // button changes pending to be shown (at most 1 per frame,
@@ -675,60 +663,58 @@ diff -ruN a/Emulator/GamepadsInput.hpp b/Emulator/GamepadsInput.hpp
 +        int V32MousePendingX, V32MousePendingY;
 +        std::deque< bool > V32MouseButtonQueues[ V32Mouse::ButtonsCount ];
 +        bool V32MouseButtonTargets[ V32Mouse::ButtonsCount ];
-+
++    
 +    public:
-+
++        
 +        // v32mouse device: host motion units per counter step
 +        int V32MouseCountsPerStep;
-+
++    
      public:
          
          // maps {Vircon gamepads} --> {PC devices}
-@@ -262,7 +362,13 @@
+@@ -262,6 +362,12 @@
          void ProcessKeyDown( SDL_Event Event );
          void ProcessKeyUp( SDL_Event Event );
          void ProcessV32KbdKey( SDL_Event Event );
--        
 +        void ProcessV32MouseMotion( SDL_Event Event );
 +        void ProcessV32MouseButton( SDL_Event Event );
-+
++        
 +        // v32mouse helpers
 +        void ClearV32MouseInput();
 +        bool V32MouseCanCapture();
-+
+         
      public:
          
-         // instance handling
-@@ -285,10 +391,25 @@
+@@ -285,11 +391,26 @@
          // queries on device usage (-1 = not used in any gamepad)
          int GetKeyboardGamepad();
          int GetV32KbdGamepad();
--        
 +        int GetV32MouseGamepad();
-+
+         
          // v32kbd device: call this exactly once before every emulated
          // frame, to report the next pending key event (if there is any)
          void UpdateV32Kbd();
-+
+         
 +        // v32mouse device: call this exactly once before every emulated
 +        // frame, to report button changes and movement since the last one
 +        void UpdateV32Mouse();
-+
++        
 +        // v32mouse device: capturing the host mouse. Releasing is
 +        // always safe (it does nothing when not captured)
 +        bool IsV32MouseCaptured();
 +        void CaptureV32Mouse();
 +        void ReleaseV32Mouse();
-+
++        
 +        // v32mouse device: call this once per main loop iteration;
 +        // it releases the mouse when it can no longer be captured
 +        void CheckV32MouseCapture();
-         
++        
          // processing input events
          void ProcessEvent( SDL_Event Event );
-diff -ruN a/Emulator/Main.cpp b/Emulator/Main.cpp
---- a/Emulator/Main.cpp	2026-10-08 17:01:02.000000000 -0400
-+++ b/Emulator/Main.cpp	2026-10-09 10:52:09.623358251 -0400
+ };
+diff -ruN --strip-trailing-cr ../orig_DesktopEmulator/Emulator/Main.cpp DesktopEmulator/Emulator/Main.cpp
+--- ../orig_DesktopEmulator/Emulator/Main.cpp	2026-10-08 17:01:02.000000000 -0400
++++ DesktopEmulator/Emulator/Main.cpp	2026-10-09 11:13:23.486227782 -0400
 @@ -353,6 +353,7 @@
                          WindowActive = false;
                          MouseIsOnWindow = false;
@@ -793,9 +779,9 @@ diff -ruN a/Emulator/Main.cpp b/Emulator/Main.cpp
                      // run another frame
                      Emulator.RunNextFrame();
                      PendingFrames -= 1;
-diff -ruN a/Emulator/Settings.cpp b/Emulator/Settings.cpp
---- a/Emulator/Settings.cpp	2026-10-08 17:01:02.000000000 -0400
-+++ b/Emulator/Settings.cpp	2026-10-08 17:09:56.687906790 -0400
+diff -ruN --strip-trailing-cr ../orig_DesktopEmulator/Emulator/Settings.cpp DesktopEmulator/Emulator/Settings.cpp
+--- ../orig_DesktopEmulator/Emulator/Settings.cpp	2026-10-08 17:01:02.000000000 -0400
++++ DesktopEmulator/Emulator/Settings.cpp	2026-10-09 11:13:23.494125094 -0400
 @@ -544,7 +544,15 @@
                  continue;
              }
