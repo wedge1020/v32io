@@ -38,9 +38,9 @@ Additionally,  when  you  make  use  of  `v32mouse`,  under  the  gamepad
 submenu  for that  port you've  connected  it, there  will be  additional
 options/information available:
 
-![v32mouse options](image/v32mouse-options.png)
+![v32mouse options](images/v32mouse-options.png)
 
 Under `v32mouse speed`  you can adjust the tracking speed  (in pixels) of
 the emulated `v32mouse` device:
 
-![v32mouse speed](image/v32mouse-speed.png)
+![v32mouse speed](images/v32mouse-speed.png)
