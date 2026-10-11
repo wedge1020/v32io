@@ -1,4 +1,4 @@
-# v32io-pico
+# firmware: RP2350-USB-A
 
 Hardware v32io adapter: firmware  for the **Waveshare RP2350-USB-A** that
 presents  a  USB keyboard  or  mouse  as  a  "gamepad" for  the  Vircon32
@@ -23,15 +23,23 @@ libraries (`keyboard.h` / `mouse.h`, both built on `v32io.h`).
 
 ## HARDWARE NOTES
 
-- The type A port is driven with PIO on GPIO 12 (D+) and GPIO 13 (D-).
+- The type  A port is driven with  PIO on GPIO 12 (D+) and  GPIO 13 (D-).
   These are the pins in the Pico SDK board definition for this board.
-- **Resistor R13.** Waveshare states that R13 must be removed for the
-  type A port to support hot-plugging and low-speed devices as a host,
-  and that after removing it the port can't be used as a device. Most
+
+- **Resistor R13.**  Waveshare states  that R13 must  be removed  for the
+  type A  port to support hot-plugging  and low-speed devices as  a host,
+  and that  after removing it  the port can't be  used as a  device. Most
   keyboards and mice are low-speed devices, so expect to need this.
-- The device is powered from the type A port, which takes its power
-  from the computer through the type C port. Devices with a lot of
-  lighting may draw more than the board can pass through.
+
+- The device is powered from the type  A port, which takes its power from
+  the computer  through the type C  port. Devices with a  lot of lighting
+  may draw more than the board can pass through.
+
+More  information  regarding the  R13  resistor  getting  in the  way  of
+low-speed USB negotiation can be found here:
+
+* https://qsantos.fr/2025/11/21/fixing-the-rp2350-usb-a-not-working-as-usb-host/
+* https://www.waveshare.com/wiki/RP2350-USB-A#accordion3
 
 ## MODES
 
@@ -56,14 +64,14 @@ keyboard of some gaming mice) may be ignored or taken for a keyboard.
 
 The board's onboard RGB LED shows the state of the adapter:
 
-| Light                                 | Meaning                              |
-| ------------------------------------- | ------------------------------------ |
-| solid red                             | powered, no keyboard or mouse        |
-| blinking yellow                       | a device was plugged in and is being set up (at least 3 blinks) |
-| 3 green blinks, then solid green      | keyboard mode, normal operation      |
-| 3 cyan blinks, then solid cyan        | mouse mode, normal operation         |
-| 2 quick blue blinks, then steady blue blinking | setup mode (see below)      |
-| 3 blue blinks, then solid green / cyan | setup mode was left                 |
+| Light                                 | Meaning                            |
+| ------------------------------------- | ---------------------------------- |
+| solid red                             | powered, no keyboard or mouse      |
+| blinking yellow                       | a device plugged in, being set up  |
+| 3 green blinks, then solid green      | keyboard mode, normal operation    |
+| 3 cyan blinks, then solid cyan        | mouse mode, normal operation       |
+| 2 quick blue blinks, then steady blue blinking | setup mode (see below)    |
+| 3 blue blinks, then solid green / cyan | setup mode was left               |
 
 If something  that is not  a keyboard or mouse  is plugged in,  the light
 blinks yellow for a moment and goes back to red.
@@ -126,13 +134,13 @@ Movement is sent as  2 counters (one per axis) that go  around a cycle of
 A program can tell apart up to 5 steps per frame, so:
 
 - Every 4 mouse counts make 1 step (`MOUSE_DIVISOR`).
-- Steps are spaced at least 5 ms apart per axis (`MOUSE_STEP_MS`), a speed
-  limit of 200 steps per second. A program moves its pointer 2 pixels per
-  step by default (its own setting), so 400 pixels per second.
-- Movement beyond the speed limit waits, but only up to 6 steps
-  (`MOUSE_BACKLOG`): the rest is dropped, so the pointer stops soon after
-  the mouse does.
-- Every button change lasts at least 25 ms (`MOUSE_CLICK_MS`), so even a
+- Steps are  spaced at  least 5  ms apart  per axis  (`MOUSE_STEP_MS`), a
+  speed
+- limit of 200 steps per second. A program moves its pointer 2 pixels per
+  step by default  (its own setting), so 400 pixels  per second. Movement
+  beyond the speed limit waits, but only up to 6 steps (`MOUSE_BACKLOG`):
+  the rest is dropped, so the pointer stops soon after the mouse does.
+- Every button change lasts at least  25 ms (`MOUSE_CLICK_MS`), so even a
   very quick click is seen by the program.
 
 If the emulator skips a whole frame  while the mouse moves at full speed,
@@ -157,34 +165,35 @@ button 10 to R. Leave the Command button unmapped.
 
 ### KEYBOARD (`v32io:kbd`)
 
-1. Press **Scroll Lock** on the keyboard to enter setup mode. The status
+1. Press **Scroll Lock** on the keyboard  to enter setup mode. The status
    light blinks blue while in this mode.
-2. In EditControls, create a profile for the `v32io:kbd` joystick and
-   press these keys when asked for each control:
+
+2. In the  **EditControls** tool,  create a  profile for  the `v32io:kbd`
+   joystick and press these keys when asked for each control:
 
    | Left | Right | Up | Down | Start | A  | B  | X  | Y  | L   | R   |
    | ---- | ----- | -- | ---- | ----- | -- | -- | -- | -- | --- | --- |
    | F1   | F2    | F3 | F4   | F5    | F6 | F7 | F8 | F9 | F10 | F11 |
 
-3. Press **Scroll Lock** again to go back to normal operation (3 blue
-   blinks, then solid green). Unplugging the keyboard also leaves setup
+3. Press **Scroll  Lock** again to  go back  to normal operation  (3 blue
+   blinks, then solid  green). Unplugging the keyboard  also leaves setup
    mode.
 
 ### MOUSE (`v32io:mouse`)
 
-1. Hold the **3 mouse buttons** (left, right and middle / wheel click)
-   together for 2 seconds to enter setup mode. The status light blinks
+1. Hold the  **3 mouse buttons** (left,  right and middle /  wheel click)
+   together for  2 seconds to enter  setup mode. The status  light blinks
    blue while in this mode. Release them.
 
-2. In EditControls, create a profile for the `v32io:mouse` joystick. For
-   each control, in order (Left, Right, Up, Down, Start, A, B, X, Y, L,
-   R), select it in EditControls and then **left click** the adapter's
-   mouse: each left click presses the next button (0, 1, 2... 10). If a
-   click went to the wrong control, a **right click** goes back one
+2. In EditControls, create a profile  for the `v32io:mouse` joystick. For
+   each control, in order  (Left, Right, Up, Down, Start, A,  B, X, Y, L,
+   R), select  it in EditControls  and then **left click**  the adapter's
+   mouse: each left click  presses the next button (0, 1,  2... 10). If a
+   click  went to  the wrong  control, a  **right click**  goes back  one
    button.
 
-3. Hold the 3 buttons for 2 seconds again to go back to normal operation
-   (3 blue blinks, then solid cyan). Unplugging the mouse also leaves
+3. Hold the 3 buttons for 2 seconds  again to go back to normal operation
+   (3 blue  blinks, then  solid cyan). Unplugging  the mouse  also leaves
    setup mode.
 
 The setup  clicks always go  in the order above,  so map the  controls in
@@ -241,13 +250,13 @@ This produces `v32io_pico.uf2`. A prebuilt one is included.
 ## FLASHING
 
 Hold the  BOOT button while plugging  the type C port  into the computer.
-The board shows up as a drive: copy `v32io_pico.uf2` into it.
+The board shows up as a drive: copy `v32io_pico.uf2` into it            .
 
 ## SOURCE FILES
 
 | File                    | What it does                                        |
 | ----------------------- | --------------------------------------------------- |
-| `src/main.c`            | USB host and device, mode selection, sending reports |
+| `src/main.c`            | USB host / device, mode selection, sending reports  |
 | `src/v32io.h`           | what all modes share: buttons, report, mode         |
 | `src/kbd.c`, `v32kbd.h` | keyboard mode (v32kbd protocol, setup mode)         |
 | `src/keymap.c`          | USB key usages to v32kbd key codes                  |
@@ -257,10 +266,12 @@ The board shows up as a drive: copy `v32io_pico.uf2` into it.
 
 ## NOTES
 
-- Keyboards are used in USB boot protocol: up to 6 keys plus modifiers
+- Keyboards are  used in USB boot  protocol: up to 6  keys plus modifiers
   held at once. Mice too: 3 buttons and movement.
-- The USB IDs (`0xCAFE:0x4B32` and `0xCAFE:0x4D32`) are not officially
+
+- The USB  IDs (`0xCAFE:0x4B32`  and `0xCAFE:0x4D32`) are  not officially
   assigned. They can be changed in `src/usb_descriptors.c`.
-- Events sent while the emulator is paused or its window has lost focus
-  are not seen by the program. For the mouse, that can make the pointer
+
+- Events sent while  the emulator is paused or its  window has lost focus
+  are not seen by  the program. For the mouse, that  can make the pointer
   jump once when the emulator resumes.
