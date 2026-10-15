@@ -2,9 +2,10 @@
 #   v32io C library: the headers (v32io.h, keyboard.h, mouse.h), their demo
 #   programs, and the stamping of the library version.
 #
-#   Used by itself from here, or by the Makefile one directory up, which
-#   calls it for the headers and the demos (the manual pages, documents and
-#   the archive are handled there).
+#   Used by itself from here, or by the Makefile at the top of the project,
+#   which calls it for the headers and the demos (the manual pages,
+#   documents and the archive are handled there). The sibling library,
+#   v32dev, has its own Makefile in ../v32dev.
 #
 #       make                   build the demo cartridges (bin/*.v32)
 #       make check             compile the headers and the demos only
@@ -22,27 +23,30 @@ DEMOS    = v32kbd v32mouse
 BUILD    = demos/build
 BIN      = demos/bin
 
-# The library version: ../VERSION is the single source (YYYYMMDD-dev or
+# The library version: ../../VERSION is the single source (YYYYMMDD-dev or
 # YYYYMMDD-release). `make version` copies it, and today's date, into the
 # headers: V32IO_VERSION and V32IO_VERSION_NUMBER in v32io.h, and the
 # "File version" date at the top of each header. Portable between GNU and
 # BSD/macOS tools: no `sed -i` (BSD sed takes the script as the backup
 # suffix), and a header is rewritten only when a line really changes, so
 # its mtime says when it was last stamped.
-VERSION        ?= $(shell cat ../VERSION 2>/dev/null)
+VERSION        ?= $(shell cat ../../VERSION 2>/dev/null)
 VERSION_NUMBER  = $(shell printf '%s' "$(VERSION)" | sed 's/^\([0-9]*\).*/\1/')
 HDRDATE        ?= $(shell LC_ALL=C date +%Y/%m/%d)
 
 # Where the Vircon32 DevTools are installed: <prefix>/Vircon32/DevTools on
 # Linux and macOS, <prefix>/DevTools on Windows (MSYS2/MinGW, where make
-# sees OS=Windows_NT). The headers go in their include/ folder, which is
-# where `compile` looks for the ones it includes -- so a program says
+# sees OS=Windows_NT). The folder is called DevTools when installed (the
+# source tree calls it DevelopmentTools); DEVTOOLS_DIRNAME says which. The
+# headers go flat in its include/ folder (no subfolders), which is where
+# `compile` looks for the ones it includes -- so a program says
 # #include "keyboard.h" and nothing else.
 PREFIX  ?= /usr/local
+DEVTOOLS_DIRNAME ?= DevTools
 ifeq ($(OS),Windows_NT)
-  DEVTOOLS_DEFAULT = $(PREFIX)/DevTools
+  DEVTOOLS_DEFAULT = $(PREFIX)/$(DEVTOOLS_DIRNAME)
 else
-  DEVTOOLS_DEFAULT = $(PREFIX)/Vircon32/DevTools
+  DEVTOOLS_DEFAULT = $(PREFIX)/Vircon32/$(DEVTOOLS_DIRNAME)
 endif
 INCDIR  ?= $(DEVTOOLS_DEFAULT)/include
 

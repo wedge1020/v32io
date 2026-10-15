@@ -1,10 +1,10 @@
 //////////////////////////////////////////////////////////////////////////////
 //
 // Compose layer: AltGr characters, dead keys and Alt codes. See compose.h
-// (what it does) and docs/COMPOSE.md (how to type each character).
+// (what it does) and docs/v32io/COMPOSE.md (how to type each character).
 //
 // This file is only logic, with no hardware: it is also built for the PC
-// by v32io-tests, which checks it against the console running a program.
+// by tests/v32io, which checks it against the console running a program.
 //
 //////////////////////////////////////////////////////////////////////////////
 

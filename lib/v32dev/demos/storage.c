@@ -10,7 +10,7 @@
 //
 // The storage device is expected in the FIRST channel of the memory card
 // (channel 0). On the host, format the card and serve a file (see
-// v32dev-protocol.md); a text file works best in byte mode:
+// docs/v32dev/PROTOCOL.md); a text file works best in byte mode:
 //
 //     v32dev.py format game.memc --ch0 storage
 //     v32dev.py serve  game.memc --ch0 storage:notes.txt,bytes

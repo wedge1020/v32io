@@ -10,7 +10,7 @@
 // network, netplay...). v32dev lets a program exchange data with the
 // outside world through the memory card: a patched emulator keeps a
 // "mailbox" region of the card file synchronized with an external host
-// program (see v32dev-protocol.md). The program only reads and writes
+// program (see docs/v32dev/PROTOCOL.md). The program only reads and writes
 // card memory; no I/O ports are involved.
 //
 // The mailbox has 4 CHANNELS. A channel is a pair of rings (a "pipe" in
@@ -61,7 +61,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// layout of the mailbox (card memory addresses; see v32dev-protocol.md)
+// layout of the mailbox (card memory addresses; see docs/v32dev/PROTOCOL.md)
 //
 #define V32DEV_HEADER          0x3003C000  // header: 64 words
 #define V32DEV_HOST_AREA       0x3003C040  // written by the host, 4 parts

@@ -126,4 +126,4 @@ the codes the BIOS font does not use) types nothing.
 
 On the emulator side none of this is needed: the host operating system's own
 keyboard layout, dead keys and compose keys type the characters (see
-`emulator/README.md`).
+`emulator/v32io/README.md`).

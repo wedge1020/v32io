@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------------
 #   `cmake  --build  .  --target  uninstall`: removes every file the last
 #   `cmake     --install`    of    this    build    tree    wrote    (its
-#   install_manifest.txt),  then the v32io directories that leaves empty
+#   install_manifest.txt),  then the v32io and v32dev directories that leaves empty
 #   --  and  v32tools/, DevTools/ (and, on Linux / macOS, Vircon32/) only
 #   if nothing else is left in them, since the DevTools, v32c++, v32opt and
 #   v32lua share them.
@@ -26,17 +26,13 @@ foreach(FILE IN LISTS FILES)
     endif()
 endforeach()
 
-# Deepest first; each only if empty.
-set(PREFIX "@CMAKE_INSTALL_PREFIX@")
-foreach(DIR
-        "${PREFIX}/@V32IO_INSTALL_DOCDIR@/demos"
-        "${PREFIX}/@V32IO_INSTALL_DOCDIR@"
-        "@V32IO_UNINSTALL_MAN3@"
-        "@V32IO_HEADER_PATH@"
-        "@V32IO_HEADER_PARENT@"
-        "${PREFIX}/@V32IO_TOOLS_ROOT@/docs"
-        "${PREFIX}/@V32IO_TOOLS_ROOT@"
-        "@V32IO_UNIX_VIRCON32_DIR@")
+# Deepest first; each only if empty. The list is made when configuring: the
+# demos, documents (and on Windows manual pages) folder of each component that
+# was installed, then the header folder and the folders above the documents
+# that the components share. A folder that something else uses (the DevTools'
+# own files, another v32tools program, the other component) is not empty and
+# stays.
+foreach(DIR @V32_PRUNE_DIRS@)
     if(DIR)
         set(DIR "${DESTDIR}${DIR}")
     endif()

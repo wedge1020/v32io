@@ -15,9 +15,9 @@ needs the emulator patch.
 
 | Layer | Where | What it does |
 |---|---|---|
-| Transport | emulator patch (`emulator/v32dev.patch`) | Keeps the mailbox region of the card in sync with the file, in an order that is safe to read. Moves words; knows nothing else. |
-| Device core | `lib/v32dev.h`, `tools/v32dev.py` | Channels, device types (class and kind), opening, liveness, streams and messages. |
-| Device drivers | `lib/storage.h`, `lib/serial.h`, later `network.h`, `netplay.h` | What a class of device means (sectors, characters, connections). |
+| Transport | emulator patch (`emulator/v32dev/v32dev.patch`) | Keeps the mailbox region of the card in sync with the file, in an order that is safe to read. Moves words; knows nothing else. |
+| Device core | `lib/v32dev/v32dev.h`, `tools/v32dev.py` | Channels, device types (class and kind), opening, liveness, streams and messages. |
+| Device drivers | `lib/v32dev/storage.h`, `lib/v32dev/serial.h`, later `network.h`, `netplay.h` | What a class of device means (sectors, characters, connections). |
 
 A program includes only the drivers it needs; each includes `v32dev.h`, the same
 way `keyboard.h` and `mouse.h` include `v32io.h`.
@@ -302,7 +302,7 @@ loaded.
 
 ## 6. Tests
 
-`tests/run.sh <ComputerSoftware with the patch applied>` builds the patched console code and runs:
+`tests/v32dev/run.sh <ComputerSoftware with the patch applied>` builds the patched console code and runs:
 
 1. unit tests of the patch on the real console classes (61 checks);
 2. a write-order test that intercepts `write(2)` (9 checks): nothing in the header or
@@ -310,7 +310,7 @@ loaded.
 3. an end-to-end transport test with the program side and the host in separate
    processes, 4 channels in both directions, with ring wrap-around;
 4. **real cartridges**: C programs compiled with the real Vircon32 compiler against
-   `lib/*.h`, booted in the patched console code with its own `RunNextFrame` loop,
+   `lib/v32dev/*.h`, booted in the patched console code with its own `RunNextFrame` loop,
    against `v32dev.py serve` in a separate process: images read and written (every
    word checked on both sides), byte mode and read only, no host, no mailbox,
    mailbox disabled, wrong device class, a host that is killed and comes back, a

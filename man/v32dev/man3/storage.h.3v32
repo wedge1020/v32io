@@ -1,0 +1,405 @@
+.TH STORAGE.H 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.SH NAME
+storage.h \- v32dev storage: read and write a file of the host in sectors
+.SH SYNOPSIS
+.nf
+.B #include \(dqstorage.h\(dq
+.PP
+.BI "storage* storage_init( int " channel " );"
+.BI "void     storage_free( storage** " st " );"
+.PP
+.BI "bool     storage_probe( storage** " st " );"
+.BI "bool     storage_wait_ready( storage** " st ", int " frames " );"
+.BI "bool     storage_ready( storage** " st " );"
+.PP
+.BI "int      storage_sector_words( storage** " st " );"
+.BI "int      storage_sectors( storage** " st " );"
+.BI "int      storage_max_sectors( storage** " st " );"
+.BI "bool     storage_readonly( storage** " st " );"
+.BI "bool     storage_bytes( storage** " st " );"
+.PP
+.BI "int      storage_read( storage** " st ", int " sector ", int " count ", int* " dest " );"
+.BI "int      storage_write( storage** " st ", int " sector ", int " count ", int* " source " );"
+.BI "int      storage_flush( storage** " st " );"
+.BI "int      storage_read_words( storage** " st ", int " offset ", int* " dest ", int " count " );"
+.BI "int      storage_write_words( storage** " st ", int " offset ", int* " source ", int " count " );"
+.PP
+.BI "int      storage_read_begin( storage** " st ", int " sector ", int " count ", int* " dest " );"
+.BI "int      storage_write_begin( storage** " st ", int " sector ", int " count ", int* " source " );"
+.BI "int      storage_flush_begin( storage** " st " );"
+.BI "bool     storage_busy( storage** " st " );"
+.BI "int      storage_wait( storage** " st " );"
+.BI "int      storage_result( storage** " st " );"
+.fi
+.SH DESCRIPTION
+A
+.B storage
+is a block device (class
+.BR V32DEV_CLASS_BLOCK ,
+kind
+.BR V32DEV_KIND_STORAGE ),
+served by the host on a channel of the memory card mailbox (see
+.BR v32dev (3v32)).
+Typically it is a file of the host computer, a disk image, which the program
+can read and write in
+.IR sectors ,
+and which is the way to get data in and out of the emulator. The core
+.BR v32dev.h (3v32)
+moves the words; this header sends it requests and interprets the replies, and
+includes it.
+.PP
+The device is made of sectors of a fixed size, announced by the host
+.RB ( storage_sector_words ),
+numbered from 0. Each word of the program is one word of the device, with one
+exception: when the host serves the file in
+.I byte mode
+.RB ( storage_bytes ),
+each word of the device holds one byte, 0 to 255 (a write keeps only the lowest
+8 bits), so that a host file such as a text file or a FAT image can be used
+directly, one character per word. Otherwise each word is stored as 4 bytes,
+little endian, on the host. The host can also serve the file read only
+.RB ( storage_readonly ),
+and a write then fails with
+.BR STORAGE_EROFS .
+The host tool serves a file with
+.BR "v32dev.py serve game.memc \-\-ch0 storage:FILE[,bytes][,ro]" .
+.SS Two ways to use it
+.TP
+.B Blocking
+.BR storage_read ,
+.B storage_write
+and
+.B storage_flush
+wait, ending frames, until the request is done. They are the easy way, but the
+program does nothing else meanwhile. A request takes at least one frame, and
+more if the host is slow to answer. They split a request for more sectors than
+the host takes at once (see
+.BR storage_max_sectors ).
+.TP
+.B Not blocking
+.BR storage_read_begin ,
+.B storage_write_begin
+and
+.B storage_flush_begin
+start a request and return. The program calls
+.B storage_probe
+on every frame and looks at
+.B storage_busy
+to see when the request is done, and then at
+.B storage_result
+for how it went. The program can keep drawing meanwhile.
+.PP
+Only one request is in progress at a time. A request that is not answered
+within
+.B STORAGE_TIMEOUT
+frames ends with
+.BR STORAGE_ETIMEOUT .
+.SS By word
+.B storage_read_words
+and
+.B storage_write_words
+address the device by word, from any position and in any amount, not by
+sector. Whole sectors go straight to or from the program's buffer, and the
+parts of sectors at the ends are moved through a sector buffer (a write reads
+such a sector first, to keep the rest of its words).
+.SS Throughput
+The reply to a request has to fit in the ring, so a request moves at most about
+2000 words and takes at least one frame. At best that is about 115000 words per
+second in word mode (15 sectors of 128 words per request), and about 92000
+words per second in byte mode (3 sectors of 512 words per request). The program
+keeps one request in flight at a time, so a slow host lowers it.
+.SH FUNCTIONS
+.TP
+.BI "storage_init( int " channel )
+Create a storage device on a channel (0 to 3). Returns
+.B NULL
+if the channel is not valid or memory runs out. It is usable once a probe says
+so (see
+.BR storage_wait_ready ).
+.TP
+.BI "storage_free( storage** " st )
+Close the channel, release the instance and its buffers and set the pointer to
+.BR NULL .
+.TP
+.BI "storage_probe( storage** " st )
+Look at the device for this frame. Call it
+.B once on every frame
+(the blocking functions do it themselves). It learns the geometry of the device
+when the channel opens or the host restarts, takes the replies to the request
+in progress, and ends the request if it timed out or the host went away.
+Returns true when a request ended, or the device became or stopped being ready.
+.TP
+.BI "storage_wait_ready( storage** " st ", int " frames )
+End frames, probing each time, until the device is usable. Gives up after the
+given number of frames and returns false.
+.TP
+.BI "storage_ready( storage** " st )
+True if the device was usable in the latest probe.
+.TP
+.BI "storage_sector_words( storage** " st )
+Words in a sector, as the host announces (128 in word mode, 512 in byte mode
+unless the host chose another size). 0 until the device has been ready.
+.TP
+.BI "storage_sectors( storage** " st )
+Sectors in the device.
+.TP
+.BI "storage_max_sectors( storage** " st )
+The most sectors in a request. The blocking functions split bigger ones; the
+not blocking ones refuse them with
+.BR STORAGE_ERANGE .
+.TP
+.BI "storage_readonly( storage** " st )
+True if the host serves the device read only.
+.TP
+.BI "storage_bytes( storage** " st )
+True if the device is in byte mode.
+.TP
+.BI "storage_read( storage** " st ", int " sector ", int " count ", int* " dest )
+Read
+.I count
+sectors from the given one into
+.IR dest ,
+which must have room for
+.I count
+times
+.B storage_sector_words
+words. Returns
+.B STORAGE_OK
+or what failed.
+.TP
+.BI "storage_write( storage** " st ", int " sector ", int " count ", int* " source )
+Write
+.I count
+sectors from
+.IR source .
+Returns
+.B STORAGE_OK
+or what failed.
+.TP
+.BI "storage_flush( storage** " st )
+Ask the host to make sure that everything written is on its storage. Returns
+.B STORAGE_OK
+or what failed.
+.TP
+.BI "storage_read_words( storage** " st ", int " offset ", int* " dest ", int " count )
+Read
+.I count
+words starting at word number
+.I offset
+of the device. Returns
+.B STORAGE_OK
+or what failed
+.RB ( STORAGE_ERANGE
+if the words are not all inside the device).
+.TP
+.BI "storage_write_words( storage** " st ", int " offset ", int* " source ", int " count )
+Write
+.I count
+words starting at word number
+.IR offset .
+Returns
+.B STORAGE_OK
+or what failed.
+.TP
+.BI "storage_read_begin( storage** " st ", int " sector ", int " count ", int* " dest )
+Start reading
+.I count
+sectors (at most
+.BR storage_max_sectors )
+into
+.IR dest ,
+which must have room for them and stay valid until the request is done. Returns
+.B STORAGE_OK
+when it has started, or the reason it did not.
+.TP
+.BI "storage_write_begin( storage** " st ", int " sector ", int " count ", int* " source )
+Start writing sectors. The words are copied right away, so
+.I source
+can be reused as soon as this returns.
+.TP
+.BI "storage_flush_begin( storage** " st )
+Start asking the host to make sure that everything written is on its storage.
+.TP
+.BI "storage_busy( storage** " st )
+True while a request is in progress.
+.TP
+.BI "storage_wait( storage** " st )
+End frames until the request in progress is done, has failed or has timed out.
+Returns its result.
+.TP
+.BI "storage_result( storage** " st )
+The result of the latest request, as of the latest probe.
+.B STORAGE_ENODEV
+if there is no instance.
+.PP
+Every function that takes a
+.I storage**
+accepts a pointer to
+.B NULL
+and then does nothing (returning false, 0, or
+.BR STORAGE_ENODEV ).
+.SH VARIABLES
+.TP
+.B struct storage
+A storage device. A program should not need to touch its fields; they are
+.IR dev ", " ready ", " sector_words ", " sectors ", " flags ", " max_sectors ,
+.IR busy ", " op ", " tag ", " status ", " count ", " buffer ", " deadline ,
+.IR reply " and " sector .
+.SS Results
+Returned by the functions that do something, and by
+.BR storage_result :
+.TP
+.B STORAGE_OK
+0. Done.
+.TP
+.B STORAGE_EINVAL
+1. The host did not understand the request.
+.TP
+.B STORAGE_ERANGE
+2. The sectors are outside the device, or more than the host takes in a request.
+.TP
+.B STORAGE_EROFS
+3. The device is read only.
+.TP
+.B STORAGE_EIO
+4. The host could not do it (its file failed), or its reply was not what the
+request needs.
+.TP
+.B STORAGE_ETIMEOUT
+5. The host did not answer within
+.B STORAGE_TIMEOUT
+frames.
+.TP
+.B STORAGE_ENODEV
+6. The device is not usable now (no mailbox, no host, or another class).
+.TP
+.B STORAGE_EBUSY
+7. Another request is in progress.
+.TP
+.B STORAGE_ENOMEM
+8. The program is out of memory.
+.TP
+.B STORAGE_EABORT
+9. The request was lost because the host restarted. Ask again.
+.SS Parameters
+.TP
+.B STORAGE_TIMEOUT
+300. Frames to wait for the reply to a request (5 seconds).
+.SS Protocol
+The words of the descriptor that the host announces, the flags in the third
+one, and the requests and replies. A program that uses the functions above does
+not need them; they are here for those who write a host. The complete
+description is in the protocol document of the project.
+.TP
+.BR STORAGE_DESC_SECTOR_WORDS ", " STORAGE_DESC_SECTORS ", " STORAGE_DESC_FLAGS ", " STORAGE_DESC_MAX_SECTORS
+Descriptor words 0 to 3: words in a sector, sectors in the device, the flags,
+and the most sectors in a request.
+.TP
+.BR STORAGE_FLAG_READONLY ", " STORAGE_FLAG_BYTES
+The flags (1 and 2): the device is read only; each word holds one byte.
+.TP
+.BR STORAGE_OP_READ ", " STORAGE_OP_WRITE ", " STORAGE_OP_FLUSH
+The requests (1, 2 and 3). Each has a tag that the reply repeats, so that a late
+reply to an earlier request is ignored. READ is tag, sector, count; WRITE is
+tag, sector, count and the words; FLUSH is tag.
+.TP
+.BR STORAGE_REPLY_READ ", " STORAGE_REPLY_WRITE ", " STORAGE_REPLY_FLUSH
+The replies (129, 130 and 131): the tag, a result, and for a read the words.
+.SH EXAMPLES
+Read the first sector of the file, and write it back with the first word
+changed. The host is waited for up to 10 seconds, and the result of each call
+is checked.
+.PP
+.RS
+.nf
+#include "video.h"
+#include "storage.h"
+
+void main()
+{
+    storage* disk = storage_init( 0 );
+    int [512] sector;
+    int result = STORAGE_ENODEV;
+
+    if( storage_wait_ready( &disk, 600 ) )
+    {
+        result = storage_read( &disk, 0, 1, sector );
+        if( result == STORAGE_OK )
+        {
+            sector[ 0 ] = sector[ 0 ] + 1;
+            result = storage_write( &disk, 0, 1, sector );
+        }
+        if( result == STORAGE_OK )
+            result = storage_flush( &disk );
+    }
+
+    while( true )
+    {
+        clear_screen( color_black );
+        if( result == STORAGE_OK )
+            print_at( 10, 10, "written" );
+        else
+            print_at( 10, 10, "failed" );
+        end_frame();
+    }
+}
+.fi
+.RE
+.PP
+A program that goes on drawing while a read is in progress:
+.PP
+.RS
+.nf
+#include "video.h"
+#include "storage.h"
+
+void main()
+{
+    storage* disk = storage_init( 0 );
+    int [512] sector;
+    int started = false;
+    int frames = 0;
+
+    while( true )
+    {
+        storage_probe( &disk );
+
+        if( storage_ready( &disk ) && !started )
+            started = ( storage_read_begin( &disk, 0, 1, sector ) == STORAGE_OK );
+
+        frames = frames + 1;
+        clear_screen( color_black );
+        print_at( 10, 10, "reading" );
+        end_frame();
+
+        if( started && !storage_busy( &disk ) )
+            break;
+    }
+    storage_free( &disk );
+
+    while( true )
+        end_frame();
+}
+.fi
+.RE
+.SH NOTES
+A part of the file that does not fill a sector is not accessible.
+.PP
+A host that is killed and comes back, possibly with another file, is noticed:
+the geometry is read again, and a request in progress ends with
+.BR STORAGE_EABORT .
+.PP
+The probe must run on every frame while a not blocking request is in progress.
+The library allocates with
+.BR malloc :
+a storage device takes a buffer for one reply and one for a sector, which are
+made again if the geometry changes.
+.SH SEE ALSO
+.BR v32dev.h (3v32),
+.BR serial.h (3v32),
+.BR v32dev (3v32),
+.BR vircon32 (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

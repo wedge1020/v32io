@@ -1,0 +1,464 @@
+.TH V32DEV.H 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.SH NAME
+v32dev.h \- v32dev core: channels of the memory card mailbox
+.SH SYNOPSIS
+.nf
+.B #include \(dqv32dev.h\(dq
+.PP
+.BI "v32dev* v32dev_init( int " channel ", int " class " );"
+.BI "void    v32dev_free( v32dev** " dev " );"
+.PP
+.BI "bool    v32dev_probe( v32dev** " dev " );"
+.BI "bool    v32dev_wait( v32dev** " dev ", int " frames " );"
+.BI "int     v32dev_state( v32dev** " dev " );"
+.BI "bool    v32dev_ready( v32dev** " dev " );"
+.BI "int     v32dev_events( v32dev** " dev " );"
+.PP
+.BI "int     v32dev_type( v32dev** " dev " );"
+.BI "int     v32dev_class( v32dev** " dev " );"
+.BI "int     v32dev_kind( v32dev** " dev " );"
+.BI "int     v32dev_status( v32dev** " dev " );"
+.BI "int     v32dev_desc( v32dev** " dev ", int " index " );"
+.BI "void    v32dev_setdesc( v32dev** " dev ", int " index ", int " value " );"
+.PP
+.BI "int     v32dev_avail( v32dev** " dev " );"
+.BI "int     v32dev_space( v32dev** " dev " );"
+.BI "int     v32dev_read( v32dev** " dev ", int* " buffer ", int " count " );"
+.BI "int     v32dev_write( v32dev** " dev ", int* " buffer ", int " count " );"
+.PP
+.BI "bool    v32dev_send( v32dev** " dev ", int " opcode ", int* " payload ", int " count " );"
+.BI "bool    v32dev_sendv( v32dev** " dev ", int " opcode ", int* " first ", int " firstcount ", int* " second ", int " secondcount " );"
+.BI "int     v32dev_next( v32dev** " dev " );"
+.BI "int     v32dev_recv( v32dev** " dev ", int* " opcode ", int* " payload ", int " max " );"
+.PP
+.BI "V32DEV_TYPE( " class ", " kind " )"
+.fi
+.SH DESCRIPTION
+The v32dev devices give a program a way to exchange data with the computer
+that runs the emulator, through the memory card (see
+.BR v32dev (3v32)
+for the overview). The core in
+.B v32dev.h
+does the part that is the same for every device: it finds out whether the card
+carries a live mailbox and whether a host is serving a channel, and it moves
+words through the channel. It knows nothing of what the words mean. The drivers
+.BR storage.h (3v32)
+and
+.BR serial.h (3v32)
+include it, so a program that uses them does not include
+.B v32dev.h
+itself; a program that needs a new kind of device uses it directly.
+.PP
+Like all Vircon32 libraries it is a single header with no library to link
+against, and the compiler emits only the functions a program calls. It
+includes
+.BR memcard.h ", " misc.h " and " time.h
+from the Vircon32 DevTools.
+.SS Channels
+The mailbox has
+.B V32DEV_CHANNELS
+(4) channels. A channel is a pair of rings, one that the host fills and the
+program empties and one the other way, and 16 control words on each side that
+tell who is there. Each ring has
+.B V32DEV_RING_WORDS
+(2024) slots, one of which is never used, so at most 2023 words wait in a ring.
+Which device is on which channel is decided by whoever formats the card and
+starts the host. A program refers to a channel by its number, from 0 to 3.
+.SS Device classes
+The host announces the device on a channel as a
+.IR type :
+the class in the top 8 bits and the kind in the rest, made with
+.BR V32DEV_TYPE( class ", " kind ).
+The class says what the device is like, in the manner of unix devices:
+.nf
+V32DEV_CLASS_NONE     0    nothing
+V32DEV_CLASS_BLOCK    1    fixed size sectors, random access
+V32DEV_CLASS_CHAR     2    a stream of words, like a terminal
+V32DEV_CLASS_PIPE     3    a one way stream with end of file (reserved)
+V32DEV_CLASS_SOCKET   4    connections and datagrams (planned)
+V32DEV_CLASS_CUSTOM   128  128 to 255, free for any use
+.fi
+.PP
+A program says which class it expects in
+.BR v32dev_init ,
+and the channel is reported as
+.B V32DEV_WRONG
+if the host serves another. The kinds are
+.B V32DEV_KIND_ANY
+(0, a generic device of the class),
+.B V32DEV_KIND_STORAGE
+and
+.B V32DEV_KIND_SERIAL
+and
+.B V32DEV_KIND_STREAM
+(1, in the block, char and pipe classes), and in the socket class
+.B V32DEV_KIND_TCP
+(1),
+.B V32DEV_KIND_UDP
+(2) and
+.B V32DEV_KIND_NETPLAY
+(3).
+.SS Probing
+All access goes through the
+.IR probe ,
+which a program calls
+.B once on every frame
+for each channel it uses. The probe looks at the state of the channel and tells
+what happened since the previous one. Calling it more than once in a frame does
+nothing: the host only changes what the program sees between frames. The
+drivers have their own probe that calls this one, and the functions that wait
+call it themselves.
+.SS Streams and messages
+A channel carries either
+.I words
+(a stream, with
+.B v32dev_read
+and
+.BR v32dev_write ),
+which may be taken or given in any amounts, or
+.I messages
+(with
+.B v32dev_send
+and
+.BR v32dev_recv ):
+a number of words, an opcode that the class defines, and that many words of
+payload, published all at once, so that a receiver that sees any of a message
+sees all of it. The class of the device decides which one a channel uses. Do
+not mix them in a channel.
+.SS Timing
+The host sees what the program wrote at the end of a frame, and the program
+sees what the host wrote at the start of one. A request and its reply therefore
+take at least one frame, if the host answers before the next one begins, and
+the throughput is limited by the rings (2023 words per channel and direction
+for each frame).
+.SH FUNCTIONS
+.TP
+.BI "v32dev_init( int " channel ", int " class )
+Create an instance for a channel (0 to 3) that expects a device of the given
+class (one of
+.BR V32DEV_CLASS_... ,
+or 0 to accept any). Returns
+.B NULL
+if the channel is not valid or memory runs out. The channel is not usable until
+a probe says so (see
+.BR v32dev_wait ).
+.TP
+.BI "v32dev_free( v32dev** " dev )
+Close the channel, so that the host can tell the program has left, release the
+instance and set the pointer to
+.BR NULL .
+.TP
+.BI "v32dev_probe( v32dev** " dev )
+Look at the channel for this frame. Returns true when the state changed or
+something happened (see
+.BR v32dev_events ).
+Does nothing, and returns false, if the frame is the same as the previous
+probe's. When the channel becomes ready, whatever an earlier run left in its
+rings is discarded.
+.TP
+.BI "v32dev_wait( v32dev** " dev ", int " frames )
+End frames, probing each time, until the channel is ready. Gives up after the
+given number of frames and returns false. A mailbox needs about 3 frames to be
+recognized, and a host may take longer: 600 frames is 10 seconds.
+.TP
+.BI "v32dev_state( v32dev** " dev )
+The state of the channel in the latest probe: one of the
+.B V32DEV_
+states below.
+.TP
+.BI "v32dev_ready( v32dev** " dev )
+True if the state is
+.BR V32DEV_READY .
+.TP
+.BI "v32dev_events( v32dev** " dev )
+What happened in the latest probe, as the bits
+.BR V32DEV_EV_OPEN ,
+.B V32DEV_EV_LOST
+and
+.BR V32DEV_EV_RESET .
+.TP
+.BI "v32dev_type( v32dev** " dev )
+The type that the host announces (class and kind in one value), or 0 if the
+channel is not ready.
+.TP
+.BI "v32dev_class( v32dev** " dev )
+The class of the type, or 0.
+.TP
+.BI "v32dev_kind( v32dev** " dev )
+The kind of the type, or 0.
+.TP
+.BI "v32dev_status( v32dev** " dev )
+The status of the device as the host reports it: the bits
+.BR V32DEV_ST_READY ,
+.B V32DEV_ST_ERROR
+and
+.BR V32DEV_ST_HUP .
+0 if the channel is not ready.
+.TP
+.BI "v32dev_desc( v32dev** " dev ", int " index )
+Word
+.I index
+(0 to 7) of the descriptor that the host fills in to describe the device (for
+example, the size of a disk). Reading it costs nothing. What the words mean
+depends on the class. 0 if the channel is not ready or the index is not valid.
+.TP
+.BI "v32dev_setdesc( v32dev** " dev ", int " index ", int " value )
+Set word
+.I index
+(0 to 7) of the request words, which the program fills in to ask something of
+the device. The host reads them. What they mean depends on the class.
+.TP
+.BI "v32dev_avail( v32dev** " dev )
+How many words can be read now. A ring index that is out of range means the
+ring is corrupt: it is emptied and counted in the
+.I errors
+of the instance.
+.TP
+.BI "v32dev_space( v32dev** " dev )
+How many words can be written now.
+.TP
+.BI "v32dev_read( v32dev** " dev ", int* " buffer ", int " count )
+Take up to
+.I count
+words from the host. May return fewer, or 0. Returns how many were taken.
+.TP
+.BI "v32dev_write( v32dev** " dev ", int* " buffer ", int " count )
+Give up to
+.I count
+words to the host. May take fewer, or 0, if the host is not keeping up. Returns
+how many were taken.
+.TP
+.BI "v32dev_send( v32dev** " dev ", int " opcode ", int* " payload ", int " count )
+Send a message of
+.I count
+words (at most
+.BR V32DEV_MSG_MAX ,
+2020). Returns false, sending nothing, if there is no room for all of it.
+.TP
+.BI "v32dev_sendv( v32dev** " dev ", int " opcode ", int* " first ", int " firstcount ", int* " second ", int " secondcount )
+Like
+.BR v32dev_send ,
+with a payload made of two pieces one after the other (for example a request
+header and the data it carries), so the program need not copy them together.
+.TP
+.BI "v32dev_next( v32dev** " dev )
+The payload size of the next message, or \-1 if none has arrived. If the ring
+does not hold a well formed message it is emptied, counted in
+.IR errors ,
+and \-1 is returned.
+.TP
+.BI "v32dev_recv( v32dev** " dev ", int* " opcode ", int* " payload ", int " max )
+Take the next message, if there is one. Stores its opcode in
+.I opcode
+and its payload in
+.IR payload ,
+and returns the payload size, or \-1 if there was no message. A message with
+more payload than
+.I max
+is discarded, and \-2 is returned.
+.PP
+Every function that takes a
+.I v32dev**
+accepts a pointer to
+.B NULL
+and then does nothing (returning 0, false, or the
+.B V32DEV_NOCARD
+state).
+.SH VARIABLES
+.TP
+.B struct v32dev
+A channel. A program should not need to touch its fields; they are:
+.nf
+int   channel;     channel number, 0 to 3
+int   expect;      class the program expects (0: any)
+int   state;       V32DEV_ state, latest probe
+int   events;      V32DEV_EV_ bits, latest probe
+int   frame;       frame counter at the latest probe (\-1: none yet)
+int   emu_beat;    latest emulator heartbeat seen
+int   emu_still;   probes in a row with the same emulator heartbeat
+int   host_beat;   latest host heartbeat seen
+int   host_still;  probes in a row with the same host heartbeat
+int   session;     host session when the channel became ready
+int   errors;      ring indices found corrupt (they were emptied)
+int*  header;      the mailbox header in card memory
+int*  host;        host part of this channel
+int*  cart;        program part of this channel
+.fi
+.SS States
+Returned by
+.BR v32dev_state ,
+and the reason a channel cannot be used yet:
+.TP
+.B V32DEV_NOCARD
+0. No memory card is connected. (Reading card memory without a card is a
+hardware error on the console, so nothing is read.)
+.TP
+.B V32DEV_NOEMU
+1. The card has no live mailbox: it was not formatted, the feature is turned off
+in the emulator, or the emulator does not have the patch. A header on the card
+is not enough to tell: the emulator also has to be seen counting frames in it.
+.TP
+.B V32DEV_NOHOST
+2. The mailbox is live but nobody serves this channel: the host has not
+announced itself, or its heartbeat stopped.
+.TP
+.B V32DEV_WRONG
+3. A host serves a device of another class than the one the program expects.
+.TP
+.B V32DEV_READY
+4. The channel can be used.
+.SS Events
+Returned by
+.BR v32dev_events ,
+about the latest probe:
+.TP
+.B V32DEV_EV_OPEN
+1. The channel just became ready.
+.TP
+.B V32DEV_EV_LOST
+2. The channel stopped being ready.
+.TP
+.B V32DEV_EV_RESET
+4. The host restarted while the channel was ready, so the rings were emptied.
+Whatever the program was waiting for is lost and has to be asked again.
+.SS Device status
+The bits of
+.BR v32dev_status :
+.TP
+.B V32DEV_ST_READY
+1. The device works.
+.TP
+.B V32DEV_ST_ERROR
+2. The device has failed.
+.TP
+.B V32DEV_ST_HUP
+4. The other end is gone, and there will be no more data once the ring has been
+emptied.
+.SS Classes and kinds
+.TP
+.BR V32DEV_CLASS_NONE ", " V32DEV_CLASS_BLOCK ", " V32DEV_CLASS_CHAR ", " V32DEV_CLASS_PIPE ", " V32DEV_CLASS_SOCKET ", " V32DEV_CLASS_CUSTOM
+0, 1, 2, 3, 4 and 128 (to 255): see above.
+.TP
+.BR V32DEV_KIND_ANY ", " V32DEV_KIND_STORAGE ", " V32DEV_KIND_SERIAL ", " V32DEV_KIND_STREAM ", " V32DEV_KIND_TCP ", " V32DEV_KIND_UDP ", " V32DEV_KIND_NETPLAY
+0, 1, 1, 1, 1, 2 and 3: see above.
+.TP
+.BI V32DEV_TYPE( class ", " kind )
+The type value for a class and a kind:
+.BI ( class " << 24) | " kind .
+.SS Library parameters
+.TP
+.B V32DEV_EMU_STILL
+3. Probes in a row without the emulator's heartbeat changing before the
+mailbox is taken as not live.
+.TP
+.B V32DEV_HOST_STILL
+120. Frames without the host's heartbeat changing before the host is taken as
+gone (2 seconds).
+.TP
+.B V32DEV_MSG_MAX
+2020. The most payload words in a message.
+.TP
+.BR V32DEV_CHANNELS ", " V32DEV_RING_WORDS ", " V32DEV_PART_WORDS ", " V32DEV_CONTROL_WORDS
+4 channels; 2024 slots in a ring; 2040 words in each part of a channel (the
+control words and a ring); 16 control words.
+.SS Layout of the mailbox
+The addresses and the indices of the words in card memory. A program that uses
+the drivers or the functions above does not need them; they are here for those
+who write a host or a driver. The complete description is in the protocol
+document of the project.
+.TP
+.BR V32DEV_HEADER ", " V32DEV_HOST_AREA ", " V32DEV_CART_AREA
+0x3003C000, 0x3003C040 and 0x3003E020. Where the header, the part written by
+the host (4 parts) and the part written by the program (4 parts) start.
+.TP
+.BR V32DEV_MAGIC ", " V32DEV_VERSION
+0x31564544 (the bytes DEV1) and 1. Words 0 and 1 of the header. V32DEV_VERSION
+is the version of the mailbox protocol, not of the library.
+.TP
+.BR V32DEV_HDR_MAGIC ", " V32DEV_HDR_VERSION ", " V32DEV_HDR_CHANNELS ", " V32DEV_HDR_PART_WORDS ", " V32DEV_HDR_EMU_FLAGS ", " V32DEV_HDR_EMU_BEAT
+Indices of the header words: 0, 1, 3, 4, 8 and 9. The last two are kept by the
+emulator in memory only.
+.TP
+.BR V32DEV_H_TYPE ", " V32DEV_H_FLAGS ", " V32DEV_H_BEAT ", " V32DEV_H_H2C_HEAD ", " V32DEV_H_C2H_TAIL ", " V32DEV_H_SESSION ", " V32DEV_H_STATUS ", " V32DEV_H_DESC
+Control words of a part written by the host (the program only reads them): the
+type, the flags (bit 0: a host is attached), the heartbeat, the write index of
+the host to program ring, the read index of the program to host ring, the
+session (it changes each time the host starts serving), the status, and the 8
+descriptor words from index 8.
+.TP
+.BR V32DEV_C_FLAGS ", " V32DEV_C_C2H_HEAD ", " V32DEV_C_H2C_TAIL ", " V32DEV_C_BEAT ", " V32DEV_C_SESSION ", " V32DEV_C_STATUS ", " V32DEV_C_DESC
+Control words of a part written by the program: the flags (bit 0: the program
+has opened the channel), the write index of the program to host ring, the read
+index of the host to program ring, an optional heartbeat, the session (one more
+each time the program opens the channel), the status, and the 8 request words
+from index 8.
+.SH EXAMPLES
+A device of the char class used directly: show on the screen the words the host
+sends, as characters, and answer each one with the next character.
+.PP
+.RS
+.nf
+#include "video.h"
+#include "v32dev.h"
+
+void main()
+{
+    v32dev* dev = v32dev_init( 1, V32DEV_CLASS_CHAR );
+    int [2] text;
+    int [1] word;
+
+    text[ 0 ] = 0;
+    text[ 1 ] = 0;
+
+    while( true )
+    {
+        v32dev_probe( &dev );
+        clear_screen( color_black );
+
+        if( v32dev_ready( &dev ) )
+        {
+            while( v32dev_read( &dev, word, 1 ) == 1 )
+            {
+                text[ 0 ] = word[ 0 ];
+                word[ 0 ] = word[ 0 ] + 1;
+                v32dev_write( &dev, word, 1 );
+            }
+            print_at( 10, 10, text );
+        }
+        else if( v32dev_state( &dev ) == V32DEV_NOEMU )
+            print_at( 10, 10, "no mailbox: card or emulator" );
+        else
+            print_at( 10, 10, "waiting for the host" );
+
+        end_frame();
+    }
+}
+.fi
+.RE
+.SH NOTES
+The probe must run on every frame. The host is declared gone after
+.B V32DEV_HOST_STILL
+frames without a sign of life, and a program that skips frames can make a slow
+host look dead.
+.PP
+The state of a channel is kept in the card (indices and sessions), not in the
+program's memory, so that a program restarted by a console reset, or a host
+restarted by its user, finds the channel in a state it can repair: when a
+channel becomes ready each side empties the end of the rings that it owns.
+.PP
+The mailbox occupies the last 64 KiB of the card. A program that keeps its own
+data there conflicts with it.
+.PP
+The library allocates with
+.BR malloc ,
+so a program that needs it must leave memory for the instances.
+.SH SEE ALSO
+.BR storage.h (3v32),
+.BR serial.h (3v32),
+.BR v32dev (3v32),
+.BR memcard.h (3v32),
+.BR vircon32 (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

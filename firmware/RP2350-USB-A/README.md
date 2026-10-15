@@ -140,7 +140,7 @@ that a US keyboard doesn't have:
 - **Alt codes**: hold the left Alt, type the character's code on the
   numeric keypad, release Alt.
 
-Everything is listed in [`docs/COMPOSE.md`](../../docs/COMPOSE.md), which is
+Everything is listed in [`docs/v32io/COMPOSE.md`](../../docs/v32io/COMPOSE.md), which is
 generated with the tables (`tools/gen-charset.py`). A character typed this
 way is sent to the program as a **typed character** (see the protocols:
 a codepage prefix and a payload, 2 events), and the keys that typed it are

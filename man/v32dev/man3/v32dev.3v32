@@ -1,0 +1,161 @@
+.TH V32DEV 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.SH NAME
+v32dev \- files, a terminal and other devices for Vircon32 programs, through the memory card
+.SH SYNOPSIS
+.nf
+.B #include \(dqstorage.h\(dq
+.B #include \(dqserial.h\(dq
+.fi
+.SH DESCRIPTION
+A Vircon32 program can only reach what the console has: video, sound, gamepads
+and a memory card. The v32dev project uses the memory card to give a program a
+way to exchange data with the computer that runs the emulator: read and write
+a file, talk to a terminal, and later use a network. This page is the overview
+of the C library a program uses for that. It has three headers:
+.TP
+.BR v32dev.h (3v32)
+The core. Finds out whether the memory card carries a live mailbox and
+whether a host is serving a channel of it, and moves words or messages through
+the channel. Knows nothing of what the data means. Included by the other two.
+.TP
+.BR storage.h (3v32)
+.B storage
+\(em a block device: a file of the host, read and written in sectors, or by
+word at any position. The way to load data into, and save data out of, the
+emulator.
+.TP
+.BR serial.h (3v32)
+.B serial
+\(em a character device: a stream of words in both directions, such as the
+terminal that runs the host tool.
+.PP
+Every function, structure and constant has its own page that opens the page of
+the header it belongs to, so
+.B "man storage_read"
+and
+.B "man V32DEV_READY"
+work.
+.SS How it works
+The last 64 KiB of the memory card are a
+.IR mailbox :
+four
+.I channels
+that each hold a ring of words from the host to the program, a ring from the
+program to the host, and some control words. The program only reads and writes
+card memory; no input or output ports are involved. A patched emulator keeps
+the mailbox synchronized with the card file on disk, and a
+.I host
+program (the
+.B v32dev.py
+tool of the project) reads and writes that file and decides what is at the
+other end of each channel, in the manner of unix devices: a
+.B block
+device (a disk), a
+.B char
+device (a terminal), a
+.B pipe
+or a
+.B socket.
+The host announces the class and kind of the device on a channel, and a program
+says which class it expects.
+.PP
+Because the host only sees what the program wrote at the end of a frame, and
+the program only sees what the host wrote at the start of one, a request and
+its reply take at least one frame. The programs of this library therefore
+either wait by ending frames, or let the program go on drawing and look again
+on the next frame.
+.PP
+The complete description of the layout and of the protocol is in the file
+.I PROTOCOL.md
+of the project documents.
+.SS Setting up
+The card is prepared on the host before the emulator loads it, and the host
+serves the devices while the program runs:
+.PP
+.nf
+v32dev.py format game.memc \-\-ch0 storage \-\-ch1 serial
+v32dev.py serve  game.memc \-\-ch0 storage:notes.txt,bytes \-\-ch1 serial:stdio
+.fi
+.PP
+Then run the program in an emulator that has the v32dev patch, with
+.I game.memc
+as its memory card. The host can be started before or after the program, and
+restarted while it runs. Without the patch the program still works: its
+channels report that there is no live mailbox.
+.SS Programs
+A program creates a device on a channel (0 to 3), calls its
+.B probe
+function once on every frame (or uses the functions that wait, which do it),
+and then uses it:
+.PP
+.RS
+.nf
+#include "video.h"
+#include "storage.h"
+
+void main()
+{
+    int [128] words;
+    storage* disk = storage_init( 0 );
+
+    if( storage_wait_ready( &disk, 600 ) )
+    {
+        storage_read_words( &disk, 0, words, 128 );
+        storage_write_words( &disk, 0, words, 128 );
+        storage_flush( &disk );
+    }
+
+    storage_free( &disk );
+
+    while( true )
+    {
+        end_frame();
+    }
+}
+.fi
+.RE
+.PP
+There is nothing to link. The headers are installed beside the Vircon32
+DevTools headers, so
+.BR compile (1)
+finds them with a plain
+.B #include \(dqstorage.h\(dq
+and no options, and it compiles only the functions that the program calls.
+.SS Where things are
+After the project is installed (see the
+.I README
+of the project):
+.TP
+.I Vircon32/DevTools/include
+The headers, in the directory where the DevTools put theirs.
+.TP
+.I /usr/local/share/man/man3
+These manual pages.
+.TP
+.I Vircon32/v32tools/docs/v32dev
+The documentation of the project, the protocol description and the example
+program.
+.PP
+The host tool and the emulator patch are not installed by the headers: they
+are in the
+.I tools
+and
+.I emulator/v32dev
+directories of the project.
+.SS Related
+.B v32io
+is the sibling of v32dev in the same project. It carries a keyboard and a mouse
+on a gamepad port, works on real hardware, and needs no emulator patch.
+Its manual, if installed, starts at
+.B man v32io.
+.SH SEE ALSO
+.BR v32dev.h (3v32),
+.BR storage.h (3v32),
+.BR serial.h (3v32),
+.BR vircon32 (3v32),
+.BR memcard.h (3v32),
+.BR compile (1)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

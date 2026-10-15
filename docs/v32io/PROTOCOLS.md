@@ -64,7 +64,7 @@ character p (0 to 127, in practice the glyphs 14 to 31). Payload 0 is valid
 * **Both events are key releases** (Down). A library from before this
   extension then sees two releases: `v32kbd_read()` skips them,
   `v32kbd_readevent()` returns them as releases, and no key press is ever
-  produced (verified in `v32io-tests`, modes 3 and 4 of the harness). The
+  produced (verified in `tests/v32io`, modes 3 and 4 of the harness). The
   only side effect there is that `held[]` of the key whose code equals the
   payload is cleared, in the unlikely case it was down. The new library
   accepts either action, so this could be changed later.

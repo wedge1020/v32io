@@ -1,272 +1,185 @@
-# v32io
+# v32io and v32dev
 
-Vircon32 hardware  accessories and  in-environment Vircon32 C  drivers to
-support them.
+Ways for a Vircon32 program to reach beyond the console: hardware accessories
+and emulator features, and the in-environment Vircon32 C drivers (headers you
+include into your CART or BIOS) that make use of them.
 
-## v32io Vircon32 C libraries
+The project has two components. They are independent, share the same
+version and the same install layout, and can be installed together or one
+at a time.
 
-This repository hosts the in-environment Vircon32 drivers (in the form of
-Vircon32 C libraries):  header files you include into  your existing BIOS
-or CART  that provides the various  functions to read /  decode / process
-the gamepad button-encoded data from the outside world.
+| | **v32io** | **v32dev** |
+| --- | --- | --- |
+| What it gives a program | a keyboard and a mouse | files of the host, a terminal, later a network |
+| Carried by | the 11 controls of a gamepad port | the memory card (a mailbox in its last 64 KiB) |
+| Needs | the RP2350-USB-A adapter *or* an emulator with the v32io patches | an emulator with the v32dev patch, and the host tool |
+| Works on real hardware | yes (with the adapter) | no (it is an emulator feature) |
+| C drivers | `v32io.h`, `keyboard.h`, `mouse.h` | `v32dev.h`, `storage.h`, `serial.h` |
+| Manual | `man v32io` | `man v32dev` |
+| Start reading | [`lib/v32io/README.md`](lib/v32io/README.md) | [`lib/v32dev/README.md`](lib/v32dev/README.md) |
 
-Currently provided are:
+## v32io: keyboard and mouse through gamepad ports
 
-  * `v32io`: the core data access library (handles processing of buttons)
-  * `v32kbd`: the library allowing full keyboard functionality
-  * `v32mouse`: the library providing mouse functionality
+A v32io device is seen by the console as an ordinary gamepad, but its 11
+controls carry data (a key event, a mouse movement) instead of game presses,
+and a driver in the program decodes it. The libraries are `v32io` (the core,
+which reads and packs the buttons), `v32kbd` (the full keyboard, including
+typed characters outside ASCII) and `v32mouse` (a pointer with three buttons).
 
-The Vircon32 C libraries is located under `lib/`
+The conduit outside the console is one of:
 
-## v32io hardware firmware
+* **The hardware adapter**: firmware for a Waveshare RP2350-USB-A (a Pi Pico 2
+  class board, with its R13 resistor removed) that presents a USB keyboard or
+  mouse to the computer as a USB gamepad. It works with any Vircon32 emulator,
+  stock or modified, which does not know it is anything but a gamepad. See
+  [`firmware/RP2350-USB-A/README.md`](firmware/RP2350-USB-A/README.md).
+* **The emulator patches**: a modified DesktopEmulator that has `v32kbd` and
+  `v32mouse` in its Gamepads menu and uses the keyboard and mouse of the
+  computer, with no hardware. See
+  [`emulator/v32io/README.md`](emulator/v32io/README.md).
 
-In  order  for the  Vircon32  in-environment  drivers to  function,  some
-external conduit is required. This has taken the form of two approaches:
+How the devices work, the key codes, the movement encoding and the API are in
+[`lib/v32io/README.md`](lib/v32io/README.md); the protocols in
+[`docs/v32io/PROTOCOLS.md`](docs/v32io/PROTOCOLS.md); typing special
+characters on the adapter in [`docs/v32io/COMPOSE.md`](docs/v32io/COMPOSE.md).
 
-### Hardware peripheral
+## v32dev: files, a terminal and more through the memory card
 
-An emulator-independent  solution takes the  form of custom  Raspberry pi
-pico 2 firmware loaded onto a  specific and modified board (The Waveshare
-RP2350-USB-A with its R13 resistor removed).
+v32dev lets a program exchange data with the computer that runs the emulator,
+through its **memory card**. A patched DesktopEmulator keeps the last 64 KiB
+of the card file synchronized while the program runs, and a *host* program
+(`tools/v32dev.py`) reads and writes that file. The program only reads and
+writes card memory: no new I/O ports, no new hardware.
 
-* URL: https://www.waveshare.com/rp2350-usb-a.htm?srsltid=AU7gw4X3Jb9rUmb0MDpPOuzu_z4PlolE_jQZhU-r79UBAfWo9jPr1wsY
+The mailbox has 4 channels, and each is a device in the manner of unix
+devices, announced by the host: a *block* device (`storage.h`: sectors of a
+file), a *char* device (`serial.h`: a terminal), and later *pipe* and *socket*
+devices (`network.h`, `netplay.h`). The C side is a core, `v32dev.h`, that the
+drivers include, as `keyboard.h` and `mouse.h` include `v32io.h`.
 
-The firmware provides support for  standard, conforming USB keyboards and
-mice, using the color LED to  provide status indicators of the device (no
-device recognized, device connecting/connected, and configuration mode).
+The quick start, the API at a glance and the host tool are in
+[`lib/v32dev/README.md`](lib/v32dev/README.md); the emulator patch in
+[`emulator/v32dev/README.md`](emulator/v32dev/README.md); the full description
+of the layout and the protocol in
+[`docs/v32dev/PROTOCOL.md`](docs/v32dev/PROTOCOL.md).
 
-The configured  hardware peripheral  (ie a Vircon32  EditControls profile
-with  inputs mapped  to  gamepad buttons),  when  connected will  present
-itself to any Vircon32 emulator (stock or modified) as one of `v32io:kbd`
-or `v32io:mouse`, which can be selected by any of the four gamepad ports.
-The emulator does not know it is anything other than a USB gamepad.
+## Layout
 
-## DesktopEmulator patches
+Everything that belongs to one component is under a folder of its name, so
+that a part can be found, installed or left out on its own.
 
-In  lieu  of using  the  `v32io`  Vircon32  Hardware Accessory,  you  can
-instead  use a  modified  version of  the  Vircon32 DesktopEmulator.  The
-stock/official emulator does not currently include this functionality, so
-you have two options regarding the emulator: patching the stock emulator,
-or using a fork of the  Vircon32 DesktopEmulator with the patches already
-applied.
-
-### Modified Emulator
-
-The  stock   Vircon32  emulator   does  not   include  support   for  any
-`v32io`-based peripherals.
-
-This fork of the [Vircon32 ComputerSoftware](https://github.com/wedge1020/ComputerSoftware/tree/v32io) repository, under its `v32io` branch, has implemented emulator-level implementations of these `v32io` peripherals, requiring no physical hardware.
-
-The use  of the provided `v32kbd`  device (under the Gamepad  menu), will
-emulate the `v32io`  functionality on your system  keyboard, allowing for
-the  full typing  experience  within Vircon32.  This  option is  mutually
-exclusive with the existing `keyboard` device.  Only one or the other can
-be enabled at any one time (on any gameport).
-
-The use of the provided `v32mouse`  device (under the Gamepad menu), will
-emulate the  `v32io` functionality with  your system mouse,  allowing for
-mouse  functionality  within  Vircon32.  Note that  when  you  focus  the
-Vircon32 DesktopEmulator window, the mouse  pointer WILL be captured, and
-you  will need  to issue  `CTRL`+`ALT` (the  left `ALT`  specifically, to
-reduce potential conflicts  with keyboards using `AltGr`)  to release the
-pointer back to the system.
-
-### Patch the stock DesktopEmulator
-
-On this  repository, under  the `emulator/`  directory, are  three `.patch`
-files, to  be used for patching  in `v32kbd` and `v32mouse`  support into
-the stock Vircon32 DesktopEmulator (`v32kbd.patch`, `v32mouse.patch` and
-`v32kbd-text.patch`, applied in that order: see `emulator/README.md`).
-The last one makes `v32kbd` also send the *typed characters* described
-below; the other two work without it.
-
-## Typed characters
-
-Key codes identify keys, not what they type, so the accented letters, the
-euro sign and the box drawing characters of the Vircon32 BIOS font could
-not be typed. They can now: the device sends such a character as 2 events
-(a codepage prefix, using the key codes 30 and 31 that were unused, then
-the low 7 bits of the character), both as key releases so programs built
-with the older library just see releases and never a key press. In a
-program:
-
-```
-glyph = v32kbd_glyph (v32kbd_read (&keyboard));   // character to draw, or 0
-```
-
-* The patched **emulator** reports whatever the computer's keyboard layout
-  types (dead keys, AltGr...) if the BIOS font has it.
-* The **hardware adapter** has its own compose layer (AltGr, dead keys and
-  Alt codes on a US keyboard): see `docs/COMPOSE.md`. Its prebuilt
-  `firmware/RP2350-USB-A/v32io_pico.uf2` predates it and has to be rebuilt
-  to get it.
-
-Details and the alternatives that were considered: `docs/PROTOCOLS.md`.
+| Folder | What is in it |
+| --- | --- |
+| `lib/v32io/`, `lib/v32dev/` | the Vircon32 C libraries (headers, demos, a `Makefile` and a README each); `lib/README.md` is the index |
+| `man/v32io/man3/`, `man/v32dev/man3/` | the manual pages of each component, section `3v32` |
+| `docs/v32io/`, `docs/v32dev/` | protocol references (v32io: protocols, typing special characters; v32dev: the protocol) |
+| `emulator/v32io/`, `emulator/v32dev/` | the DesktopEmulator patches of each component |
+| `tests/v32io/`, `tests/v32dev/` | the end-to-end tests of each component; see `tests/README.md` |
+| `firmware/` | RP2350-USB-A adapter firmware (v32io only) |
+| `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); the manual page and version tools, which serve both |
+| `cmake/` | the CMake uninstall script |
 
 ## Building and installing
 
-There is nothing to compile for the library itself: it is Vircon32 C
+There is nothing to compile for the libraries themselves: they are Vircon32 C
 headers. The project has a `Makefile` and, as an alternative that gives the
-same result, a `CMakeLists.txt`:
+same result, a `CMakeLists.txt`. Both can install **v32io only (the default),
+v32dev only, or both**; a component's manual pages, documents and demos are
+installed only when its headers are.
 
 ```
-make                  # build the demo cartridges (lib/demos/bin)
-make test             # version stamps, manual pages and their examples
-make sysinstall       # headers, manual pages, documents (may need sudo)
-make sysuninstall
-make version          # show the version and stamp it (see below)
-make archive          # v32io-project.zip
+make                              # build the demo cartridges of both components
+make test                         # version stamps, manual pages and their examples
+make sysinstall                   # v32io only (may need sudo)
+make sysinstall COMPONENTS=v32dev # v32dev only
+make sysinstall COMPONENTS=both   # both
+make sysuninstall                 # remove what COMPONENTS names (same choices)
+make version                      # show the version and stamp it (see below)
+make archive                      # v32io-project.zip
 ```
+
+`sysinstall-v32io`, `sysinstall-v32dev` and `sysinstall-both` (and the same with
+`sysuninstall`) are the same thing as targets.
 
 ```
 mkdir build && cd build
-cmake ..              # -DCMAKE_INSTALL_PREFIX=<dir> to install elsewhere
+cmake ..                          # v32io only (the default)
+cmake -DV32_COMPONENTS=v32dev ..  # v32dev only
+cmake -DV32_COMPONENTS=both ..    # both
 cmake --build .
 ctest
-cmake --install .     # may need sudo
+cmake --install .                 # may need sudo
 cmake --build . --target uninstall
-cpack                 # .tar.gz / .deb / .rpm, or .zip on Windows
+cpack                             # .tar.gz / .deb / .rpm, or .zip on Windows
 ```
+
+(`-DCMAKE_INSTALL_PREFIX=<dir>` installs elsewhere. The choice is made when
+configuring, and the uninstall target removes what that install put down.)
 
 Both put (by default, with `/usr/local` as the prefix on Linux and macOS):
 
-| What                   | Where                                           |
-| ---------------------- | ----------------------------------------------- |
-| `v32io.h`, `keyboard.h`, `mouse.h` | `Vircon32/DevTools/include/`        |
-| manual pages (`3v32`)  | `share/man/man3/`                               |
-| README, docs, demos    | `Vircon32/v32tools/docs/v32io/`                 |
+| What | Where | Installed with |
+| --- | --- | --- |
+| `v32io.h`, `keyboard.h`, `mouse.h` | `Vircon32/DevTools/include/` | v32io |
+| `v32dev.h`, `storage.h`, `serial.h` | `Vircon32/DevTools/include/` | v32dev |
+| v32io manual pages (`3v32`) | `share/man/man3/` | v32io |
+| v32dev manual pages (`3v32`) | `share/man/man3/` | v32dev |
+| README, protocol documents, demos | `Vircon32/v32tools/docs/v32io/` | v32io |
+| README, protocol document, demo | `Vircon32/v32tools/docs/v32dev/` | v32dev |
 
-The headers go in the **DevTools' `include/` folder** because that is where
-the Vircon32 compiler (which has no `-I` option) looks for the headers a
-program includes: afterwards a program says `#include "keyboard.h"` and
-that is all. On Windows (MSYS2/MinGW) the layout is `DevTools/include`
-under the Vircon32 folder, as the DevTools use. `PREFIX`, `DESTDIR`, and
-for CMake `-DV32IO_INSTALL_INCLUDEDIR=<dir>`, change it. `lib/Makefile`
-does the library part on its own (`make -C lib`, see `lib/README.md`).
+The headers of both components go **directly in the DevTools' `include/`
+folder, with no subfolders**, because that is where the Vircon32 compiler (which
+has no `-I` option) looks for the headers a program includes: afterwards a
+program says `#include "keyboard.h"` or `#include "storage.h"` and that is all.
+On Windows (MSYS2/MinGW) the layout is `DevTools/include` under the Vircon32
+folder, as the DevTools use.
+
+Note on the name: the folder that holds the headers is `DevTools` once the
+Vircon32 tools are installed (`DevelopmentTools` is only the name of its source
+folder in the ComputerSoftware repository). If your installation names it
+differently, `DEVTOOLS_DIRNAME=<name>` (make) or `-DV32_DEVTOOLS_DIRNAME=<name>`
+(CMake) changes it, and `INCDIR=<dir>` / `-DV32_INSTALL_INCLUDEDIR=<dir>` sets
+the header folder directly. `PREFIX` and `DESTDIR` work as usual.
+`lib/v32io/Makefile` and `lib/v32dev/Makefile` do the library part of each
+component on their own (`make -C lib/v32dev`, see the READMEs there).
 
 `make test` and `ctest` check that the version stamps agree and that the
-manual pages are well formed. With the Vircon32 DevTools around
-(`DEVTOOLS=<folder with compile>` or on the `PATH`), they also compile the
-examples in the manual pages and the demos. The end-to-end tests that run
-the firmware logic and the library on the console of the emulator are
-`make realcheck` (see `v32io-tests/README.md`).
+manual pages of both components are well formed. With the Vircon32 DevTools
+around (`DEVTOOLS=<folder with compile>` or on the `PATH`), they also compile
+the examples in the manual pages and the demos. The end-to-end tests that run
+the libraries on the console of the emulator are `make realcheck` (see
+`tests/README.md`).
 
 ## Manual pages
 
 Each header has a manual page in section `3v32` (the one the Vircon32 C
-library uses), and so does every function, structure and constant:
+library uses), and so does every function, structure and constant. The pages
+are in two sets, one for each component, and a set is installed only with its
+component:
 
 ```
-man keyboard.h        man v32kbd_read        man V32KEY_PAGE_HIGH
-man mouse.h           man v32mouse_probe
-man v32io.h           man v32io             # overview
+man v32io             # overview of v32io      man v32dev            # overview of v32dev
+man keyboard.h        man mouse.h            man storage.h         man serial.h
+man v32kbd_read       man V32KEY_PAGE_HIGH   man storage_read      man V32DEV_READY
 ```
 
-They are in `man/man3`; the alias pages are written by
-`tools/gen-manaliases.py` and checked by `tools/lint-man.py` (neither
-mandoc nor groff are needed for that).
+They are in `man/v32io/man3` and `man/v32dev/man3`; the alias pages are
+written by `tools/gen-manaliases.py` and checked by `tools/lint-man.py`
+(neither mandoc nor groff are needed for that).
 
 ## Version
 
-`VERSION` holds the version: the release date as `YYYYMMDD`, then `-dev`
-or `-release` (now `20261014-dev`). `make version` stamps it, and today's
-date, into `lib/v32io.h` (`V32IO_VERSION` and `V32IO_VERSION_NUMBER`, which
-programs can read), the `File version` banner of each header and the
-`.TH` line of every manual page. To release:
+`VERSION` holds the version, for both components: the release date as
+`YYYYMMDD`, then `-dev` or `-release` (now `20261014-dev`). `make version`
+stamps it, and today's date, into `lib/v32io/v32io.h` (`V32IO_VERSION` and
+`V32IO_VERSION_NUMBER`, which programs can read), the `File version` banner of
+each header of both libraries, and the `.TH` line of every manual page (which
+says `v32io <version>` or `v32dev <version>`). To release:
 
 ```
 make version VERSION=20261101-release
 ```
 
 (this also writes `VERSION`). CMake, `cpack` and the package names read the
-same file.
-
-## Layout
-
-| Folder           | What is in it                                            |
-| ---------------- | -------------------------------------------------------- |
-| `lib/`           | the Vircon32 C library (headers, demos), `lib/Makefile`  |
-| `man/man3/`      | manual pages                                             |
-| `docs/`          | protocol reference, typing special characters            |
-| `firmware/`      | RP2350-USB-A adapter firmware                            |
-| `emulator/`      | DesktopEmulator patches                                  |
-| `v32io-tests/`   | end-to-end tests                                         |
-| `tools/`         | character table generator, manual page tools, checks     |
-| `cmake/`         | the CMake uninstall script                               |
-
-# v32dev
-
-Vircon32 programs talking to the outside world through the **memory card**:
-reading and writing files of the host computer (`storage.h`), a terminal
-(`serial.h`), and later a network (`network.h`, `netplay.h`). The devices are
-modeled on unix devices: each of the 4 channels of the mailbox is a *block*,
-*char*, *pipe* or *socket* device, announced by the host.
-
-v32dev is the sibling of v32io: v32io carries keyboard and mouse on a gamepad
-port (it works on real hardware); v32dev needs the emulator patch, and gives
-fast two-way data in and out of the emulator.
-
-```
-v32dev/
-  emulator/v32dev.patch     DesktopEmulator patch (patch -p0, from ComputerSoftware/)
-  lib/v32dev.h              core: channels, types, streams, messages (like v32io.h)
-  lib/storage.h             block device: sectors of a host file
-  lib/serial.h              char device: a terminal-like stream
-  lib/demos/storage.c       browse (and mark) a host file on screen
-  tools/v32dev.py           host side: format a card, serve devices
-  docs/v32dev-protocol.md   the full description
-  tests/run.sh              all the tests (see its header)
-```
-
-## Quick start
-
-1. Apply the patch to the emulator source and build it:
-   `cd ComputerSoftware && patch -p0 < v32dev.patch` (try `--dry-run` first).
-   It touches only `DesktopEmulator/ConsoleLogic/V32Console.{cpp,hpp}` and
-   `V32MemoryCardController.{cpp,hpp}`.
-2. Format a card and serve a file on it (a text file, in byte mode, one character
-   per word):
-
-   ```
-   tools/v32dev.py format game.memc --ch0 storage --ch1 serial
-   tools/v32dev.py serve  game.memc --ch0 storage:notes.txt,bytes --ch1 serial:stdio
-   ```
-3. Run a program that uses it with `game.memc` as its memory card. Format before the
-   emulator loads the card (never format a card the emulator has loaded). The host can
-   be started before or after the program, and restarted while it runs.
-
-In a program:
-
-```c
-#include "storage.h"
-
-void main (void)
-{
-    int [128] words;
-    storage  *disk = storage_init (0);            // channel 0
-
-    if (storage_wait_ready (&disk, 600))          // waits for the host
-    {
-        storage_read_words (&disk, 0, words, 128);     // first 128 words of the file
-        storage_write_words (&disk, 0, words, 128);    // and write them back
-        storage_flush (&disk);
-    }
-    storage_free (&disk);
-}
-```
-
-`storage_probe()` (or the other blocking calls, which do it) must run once per frame, like
-`v32io_probe()`. Every call that waits ends frames meanwhile; the non-blocking
-`storage_read_begin()` family lets the program keep drawing.
-
-## What is where in a program
-
-| You want | Use |
-|---|---|
-| to know if the mailbox works | `v32dev_state()`: `NOCARD`, `NOEMU`, `NOHOST`, `WRONG`, `READY` |
-| a file or disk image | `storage.h` |
-| a terminal | `serial.h` |
-| a new kind of device | `v32dev.h` (`v32dev_init`, `v32dev_probe`, `v32dev_send`/`v32dev_recv`, or `v32dev_read`/`v32dev_write`) plus a device class on the host (`Device` in `v32dev.py`) |
-
-See `docs/v32dev-protocol.md` for the layout, the device classes, and the design of
-the network and netplay devices.
+same file. (`V32DEV_VERSION` in `v32dev.h` is the version of the mailbox
+*protocol*, not of the release.)

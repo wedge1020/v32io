@@ -58,7 +58,7 @@
 //
 // The payload is the key code field of the second event (0 is valid). Both
 // events are key RELEASES, so that libraries that predate this extension
-// see releases, never a key press. See lib/keyboard.h for how the library reads them, and
+// see releases, never a key press. See lib/v32io/keyboard.h for how the library reads them, and
 // compose.h for how this firmware gets to send them.
 
 // converts a USB HID keyboard usage (page 7) into a v32kbd

@@ -4,6 +4,12 @@ Vircon32 C drivers/libraries for jury-rigged input devices that reach the
 console  through  a  gamepad  port: `v32kbd`  (keyboard)  and  `v32mouse`
 (mouse), both built on the `v32io` core.
 
+This is the **v32io** half of the project. Its sibling, **v32dev**
+(files, a terminal and more through the memory card), is in `../v32dev/`:
+see `../README.md` for the two libraries side by side, and the README at
+the top of the project for how they are installed. The two libraries are independent and can be
+used in the same program.
+
 ## DRIVERS
 
 | File         | What it is                                              |
@@ -25,8 +31,9 @@ run time: the Vircon32 C compiler has no `#if`). Both are defined in
 `v32io.h`, and stamped there by `make version` from the `VERSION` file at
 the top of the project, which is the single source of the version.
 
-`lib/Makefile` handles the library on its own (the Makefile at the top of
-the project calls it, and adds the manual pages and documents):
+`lib/v32io/Makefile` (this folder) handles the library on its own (the
+Makefile at the top of the project calls it, and adds the manual pages and
+documents, and chooses whether v32io, v32dev or both are installed):
 
 | Command          | What it does                                                     |
 | ---------------- | ---------------------------------------------------------------- |
@@ -52,7 +59,8 @@ program only needs
 The demos in this folder include `"../keyboard.h"` instead, since they
 sit next to the headers in the source tree. Everything else (manual pages
 for each header and function, `man v32kbd_read`) is installed from the
-top of the project: see its README.
+top of the project (see its README); the manual pages of this library
+are in `man/v32io/man3`.
 
 ## DEMOS
 
@@ -275,8 +283,8 @@ the prefix is forgotten, and a gamepad being plugged in forgets it too.
 The key that typed a character is not reported as a key.
 
 The library queues the character as a `v32key` with the `text` flag set.
-See `docs/PROTOCOLS.md` for the choices that were considered, and
-`docs/COMPOSE.md` for how the hardware adapter (which sees keys, not
+See `docs/v32io/PROTOCOLS.md` for the choices that were considered, and
+`docs/v32io/COMPOSE.md` for how the hardware adapter (which sees keys, not
 layouts) lets you type them.
 
 ### API
@@ -455,7 +463,9 @@ while (true)
 
 ### MODIFIED DESKTOP EMULATOR
 
-Open menu Gamepads, pick a gamepad  and select `v32kbd` or `v32mouse`.
+Open menu Gamepads, pick a gamepad  and select `v32kbd` or `v32mouse`
+(the patches and the ready-made fork are described in
+`emulator/v32io/README.md`).
 
 NOTE: The `v32kbd`  emulated device cannot be selected  while any gamepad
 uses the  `Keyboard` device (and vice  versa), since both need  access to
@@ -468,7 +478,7 @@ and are also sent to the program.
 
 The adapter  shows up as  a joystick named `v32io:kbd`  or `v32io:mouse`,
 depending on what is plugged into it. Each needs its own joystick profile
-in the emulator: see the adapter's  README for creating them (both have a
+in the emulator: see the adapter's  README (`firmware/RP2350-USB-A/README.md`) for creating them (both have a
 setup mode for EditControls).
 
 Both  profiles  map the  same  way,  button *n*  to  control  *n*, so  in

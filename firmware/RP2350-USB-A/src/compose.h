@@ -9,7 +9,7 @@
 // Compose layer (keyboard mode only): types the characters of the Vircon32
 // BIOS font that a US keyboard doesn't have. The keyboard only tells which
 // KEY was pressed, never what the computer's layout would make of it, so
-// the adapter has its own ways to type them (all described in docs/COMPOSE.md):
+// the adapter has its own ways to type them (all described in docs/v32io/COMPOSE.md):
 //
 //   AltGr (right Alt) + key       direct characters: ä é ß € ¿ ...
 //   AltGr + dead key, then letter accented letters: á à â ä ã

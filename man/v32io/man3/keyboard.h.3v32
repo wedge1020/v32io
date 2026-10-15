@@ -126,7 +126,7 @@ reports whatever the host's own keyboard layout types, if the BIOS font has
 the character. The RP2350\-USB\-A adapter, which only sees which keys are
 pressed, has its own way of typing them: AltGr and dead keys, and Alt codes
 on the numeric keypad (see
-.I docs/COMPOSE.md
+.I docs/v32io/COMPOSE.md
 in the v32io project).
 .SH FUNCTIONS
 .TP

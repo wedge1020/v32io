@@ -1,0 +1,195 @@
+.TH SERIAL.H 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.SH NAME
+serial.h \- v32dev serial: a terminal-like stream of words with the host
+.SH SYNOPSIS
+.nf
+.B #include \(dqserial.h\(dq
+.PP
+.BI "serial* serial_init( int " channel " );"
+.BI "void    serial_free( serial** " sp " );"
+.PP
+.BI "bool    serial_probe( serial** " sp " );"
+.BI "bool    serial_wait_ready( serial** " sp ", int " frames " );"
+.BI "bool    serial_ready( serial** " sp " );"
+.BI "bool    serial_hup( serial** " sp " );"
+.PP
+.BI "int     serial_avail( serial** " sp " );"
+.BI "int     serial_space( serial** " sp " );"
+.BI "int     serial_read( serial** " sp ", int* " buffer ", int " count " );"
+.BI "int     serial_write( serial** " sp ", int* " buffer ", int " count " );"
+.BI "int     serial_write_all( serial** " sp ", int* " buffer ", int " count " );"
+.PP
+.BI "int     serial_getc( serial** " sp " );"
+.BI "bool    serial_putc( serial** " sp ", int " character " );"
+.BI "int     serial_puts( serial** " sp ", int* " text " );"
+.fi
+.SH DESCRIPTION
+A
+.B serial
+is a character device (class
+.BR V32DEV_CLASS_CHAR ,
+kind
+.BR V32DEV_KIND_SERIAL ),
+served by the host on a channel of the memory card mailbox (see
+.BR v32dev (3v32)).
+It is a plain two way stream of words, like a terminal or a serial port. What
+is at the host's end is the host's choice: with
+.B serial:stdio
+the host tool connects it to the terminal that runs it (the lowest 8 bits of
+each word are a character), and with
+.B serial:echo
+it sends back what it receives. The core
+.BR v32dev.h (3v32)
+moves the words; this header adds the conveniences of a terminal, and includes
+it.
+.PP
+A word is a character, or whatever the program and the host agree on: the
+stream does not change the words. There are no messages and no boundaries.
+.PP
+Nothing blocks, except the functions that say so:
+.B serial_wait_ready
+and
+.BR serial_write_all ,
+which end frames while they wait. The rest takes what fits and returns how
+many words it moved, so a program can go on drawing.
+.SH FUNCTIONS
+.TP
+.BI "serial_init( int " channel )
+Create a serial device on a channel (0 to 3). Returns
+.B NULL
+if the channel is not valid or memory runs out. It is usable once a probe says
+so (see
+.BR serial_wait_ready ).
+.TP
+.BI "serial_free( serial** " sp )
+Close the channel, release the instance and set the pointer to
+.BR NULL .
+.TP
+.BI "serial_probe( serial** " sp )
+Look at the device for this frame. Call it
+.B once on every frame.
+Returns true when the device became or stopped being ready.
+.TP
+.BI "serial_wait_ready( serial** " sp ", int " frames )
+End frames, probing each time, until the device is usable. Gives up after the
+given number of frames and returns false.
+.TP
+.BI "serial_ready( serial** " sp )
+True if the device was usable in the latest probe.
+.TP
+.BI "serial_hup( serial** " sp )
+True if the host hung up (it says there will be no more words) and everything
+it sent has been read. Also true if there is no instance.
+.TP
+.BI "serial_avail( serial** " sp )
+Words that can be read now.
+.TP
+.BI "serial_space( serial** " sp )
+Words that can be written now (up to 2023).
+.TP
+.BI "serial_read( serial** " sp ", int* " buffer ", int " count )
+Take up to
+.I count
+words. Returns how many, which may be 0.
+.TP
+.BI "serial_write( serial** " sp ", int* " buffer ", int " count )
+Give up to
+.I count
+words. Returns how many were taken, which may be 0 if the host is not keeping up.
+.TP
+.BI "serial_write_all( serial** " sp ", int* " buffer ", int " count )
+Give all
+.I count
+words, ending frames while the host makes room. Gives up, returning how many
+words were taken, if the device stops being ready.
+.TP
+.BI "serial_getc( serial** " sp )
+Take one word, or \-1 if there is none.
+.TP
+.BI "serial_putc( serial** " sp ", int " character )
+Give one word. Returns false if the host has no room for it.
+.TP
+.BI "serial_puts( serial** " sp ", int* " text )
+Give a text: an array of words ended by 0, as in the Vircon32 string library
+(the 0 is not sent). Waits for room, as
+.BR serial_write_all .
+Returns how many words were sent.
+.PP
+Every function that takes a
+.I serial**
+accepts a pointer to
+.B NULL
+and then does nothing (returning 0 or false, and true for
+.BR serial_hup ).
+.SH VARIABLES
+.TP
+.B struct serial
+A serial device. A program should not need to touch its fields; they are
+.I dev
+(the channel, see
+.BR v32dev.h (3v32))
+and
+.IR ready .
+.SH EXAMPLES
+Echo to the host what the host types, one word at a time, and say hello first.
+.PP
+.RS
+.nf
+#include "video.h"
+#include "serial.h"
+
+void main()
+{
+    serial* port = serial_init( 1 );
+    int hello = 0;
+    int key = 0;
+
+    while( true )
+    {
+        serial_probe( &port );
+        clear_screen( color_black );
+
+        if( serial_ready( &port ) )
+        {
+            if( !hello )
+            {
+                serial_puts( &port, "hello from Vircon32" );
+                serial_putc( &port, 10 );
+                hello = true;
+            }
+
+            key = serial_getc( &port );
+            while( key >= 0 )
+            {
+                serial_putc( &port, key );
+                key = serial_getc( &port );
+            }
+            print_at( 10, 10, "connected" );
+        }
+        else
+        {
+            hello = false;
+            print_at( 10, 10, "waiting for the host" );
+        }
+
+        end_frame();
+    }
+}
+.fi
+.RE
+.SH NOTES
+The stream has no end of line or other translation: the host sends and expects
+the words as they are, and the host tool uses the lowest 8 bits of each word
+as a character. The 10 above is a line feed.
+.PP
+If the host is killed and comes back, the rings are emptied and the device
+becomes ready again by itself; words that were waiting are lost.
+.SH SEE ALSO
+.BR v32dev.h (3v32),
+.BR storage.h (3v32),
+.BR v32dev (3v32),
+.BR vircon32 (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).
