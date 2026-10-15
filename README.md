@@ -193,3 +193,80 @@ same file.
 | `v32io-tests/`   | end-to-end tests                                         |
 | `tools/`         | character table generator, manual page tools, checks     |
 | `cmake/`         | the CMake uninstall script                               |
+
+# v32dev
+
+Vircon32 programs talking to the outside world through the **memory card**:
+reading and writing files of the host computer (`storage.h`), a terminal
+(`serial.h`), and later a network (`network.h`, `netplay.h`). The devices are
+modeled on unix devices: each of the 4 channels of the mailbox is a *block*,
+*char*, *pipe* or *socket* device, announced by the host.
+
+v32dev is the sibling of v32io: v32io carries keyboard and mouse on a gamepad
+port (it works on real hardware); v32dev needs the emulator patch, and gives
+fast two-way data in and out of the emulator.
+
+```
+v32dev/
+  emulator/v32dev.patch     DesktopEmulator patch (patch -p0, from ComputerSoftware/)
+  lib/v32dev.h              core: channels, types, streams, messages (like v32io.h)
+  lib/storage.h             block device: sectors of a host file
+  lib/serial.h              char device: a terminal-like stream
+  lib/demos/storage.c       browse (and mark) a host file on screen
+  tools/v32dev.py           host side: format a card, serve devices
+  docs/v32dev-protocol.md   the full description
+  tests/run.sh              all the tests (see its header)
+```
+
+## Quick start
+
+1. Apply the patch to the emulator source and build it:
+   `cd ComputerSoftware && patch -p0 < v32dev.patch` (try `--dry-run` first).
+   It touches only `DesktopEmulator/ConsoleLogic/V32Console.{cpp,hpp}` and
+   `V32MemoryCardController.{cpp,hpp}`.
+2. Format a card and serve a file on it (a text file, in byte mode, one character
+   per word):
+
+   ```
+   tools/v32dev.py format game.memc --ch0 storage --ch1 serial
+   tools/v32dev.py serve  game.memc --ch0 storage:notes.txt,bytes --ch1 serial:stdio
+   ```
+3. Run a program that uses it with `game.memc` as its memory card. Format before the
+   emulator loads the card (never format a card the emulator has loaded). The host can
+   be started before or after the program, and restarted while it runs.
+
+In a program:
+
+```c
+#include "storage.h"
+
+void main (void)
+{
+    int [128] words;
+    storage  *disk = storage_init (0);            // channel 0
+
+    if (storage_wait_ready (&disk, 600))          // waits for the host
+    {
+        storage_read_words (&disk, 0, words, 128);     // first 128 words of the file
+        storage_write_words (&disk, 0, words, 128);    // and write them back
+        storage_flush (&disk);
+    }
+    storage_free (&disk);
+}
+```
+
+`storage_probe()` (or the other blocking calls, which do it) must run once per frame, like
+`v32io_probe()`. Every call that waits ends frames meanwhile; the non-blocking
+`storage_read_begin()` family lets the program keep drawing.
+
+## What is where in a program
+
+| You want | Use |
+|---|---|
+| to know if the mailbox works | `v32dev_state()`: `NOCARD`, `NOEMU`, `NOHOST`, `WRONG`, `READY` |
+| a file or disk image | `storage.h` |
+| a terminal | `serial.h` |
+| a new kind of device | `v32dev.h` (`v32dev_init`, `v32dev_probe`, `v32dev_send`/`v32dev_recv`, or `v32dev_read`/`v32dev_write`) plus a device class on the host (`Device` in `v32dev.py`) |
+
+See `docs/v32dev-protocol.md` for the layout, the device classes, and the design of
+the network and netplay devices.
