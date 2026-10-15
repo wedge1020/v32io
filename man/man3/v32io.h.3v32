@@ -1,0 +1,217 @@
+.TH V32IO.H 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.SH NAME
+v32io.h \- v32io core: read a gamepad as a data channel
+.SH SYNOPSIS
+.nf
+.B #include \(dqv32io.h\(dq
+.PP
+.BI "v32io* v32io_init( int " gamepad " );"
+.BI "void   v32io_free( v32io** " io " );"
+.PP
+.BI "bool   v32io_probe( v32io** " io " );"
+.BI "int    v32io_read( v32io** " io " );"
+.BI "int    v32io_changed( v32io** " io " );"
+.BI "bool   v32io_isdown( v32io** " io ", int " mask " );"
+.BI "bool   v32io_connected( v32io** " io " );"
+.BI "bool   v32io_plugged( v32io** " io " );"
+.BI "int    v32io_scan( v32io* " io " );"
+.PP
+.B #define V32IO_VERSION
+.B #define V32IO_VERSION_NUMBER
+.fi
+.SH DESCRIPTION
+The v32io devices (a keyboard, a mouse...) are connected to the console
+as ordinary gamepads. Their 11 controls (the D-pad, A, B, X, Y, L, R and
+Start) carry data instead of game presses, and a driver in the program
+decodes it. The core in
+.B v32io.h
+does the part that is the same for every device: it reads the 11
+controls of one gamepad and packs them as the bits of a single integer,
+the
+.IR "packed controls" .
+It knows nothing of what the bits mean. The drivers
+.BR keyboard.h (3v32)
+and
+.BR mouse.h (3v32)
+include it, so a program that uses them does not include
+.B v32io.h
+itself.
+.PP
+Like all Vircon32 libraries it is a single header with no library to link
+against, and the compiler emits only the functions a program calls. It
+includes
+.BR input.h ", " misc.h " and " time.h
+from the Vircon32 DevTools.
+.SS Packed controls
+Bit
+.I n
+holds the control read from port 0x402 + \fIn\fP. A bit is 1 while the
+control is pressed:
+.PP
+.nf
+bit  0  V32IO_LEFT      port 0x402  (INP_GamepadLeft)
+bit  1  V32IO_RIGHT     port 0x403
+bit  2  V32IO_UP        port 0x404
+bit  3  V32IO_DOWN      port 0x405
+bit  4  V32IO_START     port 0x406
+bit  5  V32IO_A         port 0x407
+bit  6  V32IO_B         port 0x408
+bit  7  V32IO_X         port 0x409
+bit  8  V32IO_Y         port 0x40A
+bit  9  V32IO_L         port 0x40B
+bit 10  V32IO_R         port 0x40C
+.fi
+.PP
+.B V32IO_ALL
+(2047) has all 11 bits set. Add the masks to test several controls at once.
+.PP
+The console never shows two opposite directions pressed at the same time
+(Left with Right, or Up with Down): pressing one releases the other. A
+device protocol has to be designed around that, and the ones in this family
+are.
+.SS Reading
+All reading goes through the \fIprobe\fP, which a program calls
+.B once on every frame
+for each device. The probe reads the controls, and keeps the result of the
+previous probe so that changes can be told. Calling it more than once in a
+frame does nothing: the console updates its gamepads only between frames.
+.SS Game ports
+.B FIRST_GAMEPAD_PORT
+(0),
+.BR SECOND_GAMEPAD_PORT " (1),"
+.BR THIRD_GAMEPAD_PORT " (2) and"
+.B FOURTH_GAMEPAD_PORT
+(3) are the ids that
+.BR select_gamepad (3v32)
+takes.
+.SH FUNCTIONS
+.TP
+.BI "v32io_init( int " gamepad )
+Create an instance that reads the given gamepad, or return
+.B NULL
+if memory runs out. The instance holds a small machine code routine, built
+in RAM, that reads the 11 ports in one call. Its starting state is whatever
+the gamepad shows at that moment.
+.TP
+.BI "v32io_free( v32io** " io )
+Release an instance and set the pointer to
+.BR NULL .
+.TP
+.BI "v32io_probe( v32io** " io )
+Read the controls for this frame. Returns true when the packed controls
+differ from the previous probe. Does nothing, and returns false, if the
+frame is the same as the last probe's.
+.TP
+.BI "v32io_read( v32io** " io )
+The packed controls from the latest probe.
+.TP
+.BI "v32io_changed( v32io** " io )
+The controls that changed in the latest probe, as a mask: the packed
+controls of the latest and the previous probes, XORed.
+.TP
+.BI "v32io_isdown( v32io** " io ", int " mask )
+True if any control in the mask is pressed (in the latest probe).
+.TP
+.BI "v32io_connected( v32io** " io )
+Whether a gamepad is connected to the port (as of the latest probe).
+.TP
+.BI "v32io_plugged( v32io** " io )
+True if the gamepad became connected in the latest probe. A newly connected
+gamepad shows every control released whatever it showed before, so drivers
+whose protocol depends on the history of the controls use this to start over.
+.TP
+.BI "v32io_scan( v32io* " io )
+Read the controls right now and return them packed, without touching the
+state of the probe. It selects the instance's gamepad for the read and then
+restores the one selected before. Drivers use
+.B v32io_probe
+instead.
+.PP
+Every function that takes a
+.I v32io**
+accepts a pointer to
+.B NULL
+and then does nothing (returning 0 or false).
+.SH VARIABLES
+.TP
+.B struct v32io
+.nf
+int   gamepad;     id of the gamepad being read
+int   raw;         where the RAM routine stores its result
+int   data;        packed controls, latest probe
+int   previous;    packed controls, probe before that
+int   frame;       frame counter at the latest probe
+bool  connected;   gamepad connected, latest probe
+bool  plugged;     gamepad became connected, latest probe
+int [68] routine;  the RAM routine (V32IO_ROUTINE words)
+.fi
+.TP
+.B V32IO_CONTROLS
+11, the number of controls read.
+.TP
+.B V32IO_ROUTINE
+68, the size of the RAM routine in words.
+.TP
+.B V32IO_VERSION
+The version of the library as a string, such as
+.BR \(dq20261014\-dev\(dq .
+It is the release date as YYYYMMDD followed by \-dev or \-release.
+.TP
+.B V32IO_VERSION_NUMBER
+The same date as a number (20261014), for comparisons at run time. The
+Vircon32 C compiler has no
+.B #if
+so this is compared in ordinary code.
+.PP
+The version is stamped into the header by
+.B make version
+in the v32io project, which reads it from its
+.B VERSION
+file.
+.SH EXAMPLES
+Count the frames a button of a gamepad on port 1 is held, by reading it
+through the core directly:
+.PP
+.RS
+.nf
+#include "video.h"
+#include "v32io.h"
+
+void main()
+{
+    v32io* pad  = v32io_init( SECOND_GAMEPAD_PORT );
+    int    held = 0;
+
+    while( true )
+    {
+        v32io_probe( &pad );
+
+        if( v32io_isdown( &pad, V32IO_A ) )
+            held = held + 1;
+        else
+            held = 0;
+
+        end_frame();
+    }
+}
+.fi
+.RE
+.SH NOTES
+The probe must run on every frame. A device that sends one piece of data
+per frame loses it if the program skips frames, and the drivers cannot
+tell.
+.PP
+The library allocates with
+.BR malloc ,
+so a program that needs it must leave memory for the instances (about 75
+words for the core, and more for the driver on top of it).
+.SH SEE ALSO
+.BR keyboard.h (3v32),
+.BR mouse.h (3v32),
+.BR v32io (3v32),
+.BR input.h (3v32),
+.BR vircon32 (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

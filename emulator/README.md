@@ -16,10 +16,19 @@ follows (in this order):
 ```
 $ patch -p0 < v32kbd.patch
 $ patch -p0 < v32mouse.patch
+$ patch -p0 < v32kbd-text.patch
 ```
 
-It is important that the `v32kbd.patch` is applied first, followed by the
-`v32mouse.patch`.
+It is important that the patches are applied in this order: `v32kbd.patch`
+first, then `v32mouse.patch`, then `v32kbd-text.patch`.
+
+`v32kbd-text.patch` is  optional but recommended:  it makes `v32kbd` also
+report  *typed  characters*  that  are  not  keys  on  a  US  keyboard:
+accented letters, dead keys,  AltGr characters, and anything else your
+operating system's keyboard layout can type  that the Vircon32 BIOS font
+has (Windows-1252 letters and symbols, plus the box drawing characters).
+Programs read them with `v32kbd_read()` / `v32kbd_glyph()` from the C
+library (see `lib/README.md`); older programs ignore them.
 
 ## usage
 
@@ -44,3 +53,16 @@ Under `v32mouse speed`  you can adjust the tracking speed  (in pixels) of
 the emulated `v32mouse` device:
 
 ![v32mouse speed](images/v32mouse-speed.png)
+
+## typed characters (v32kbd-text.patch)
+
+The emulator  keeps reporting keys  exactly as before. When  the host
+types a character the BIOS font has but ASCII does not, the character is
+reported *instead of* the key press that typed it, as two events: a
+codepage prefix (key code 30 or 31) and a payload. See
+`docs/PROTOCOLS.md` for the details.
+
+To  find  out whether  a  key  press  typed something  else,  the
+emulator holds back the press of every ASCII key until the host's text
+for it  arrives (in the same frame); if none  comes, it is reported as a
+key as usual. Automatic key repeat is still never reported.

@@ -16,12 +16,52 @@ Both  the v32kbd  and v32mouse  drivers include  the `v32io.h`  header to
 handle the gamepad button inputs. Each then takes that data and processes
 it according to its specific scheme.
 
+## VERSION, BUILDING AND INSTALLING
+
+The library has a version, `V32IO_VERSION` (a string such as
+`"20261014-dev"`: the release date, then `-dev` or `-release`) and
+`V32IO_VERSION_NUMBER` (the date as a number, `20261014`, to compare at
+run time: the Vircon32 C compiler has no `#if`). Both are defined in
+`v32io.h`, and stamped there by `make version` from the `VERSION` file at
+the top of the project, which is the single source of the version.
+
+`lib/Makefile` handles the library on its own (the Makefile at the top of
+the project calls it, and adds the manual pages and documents):
+
+| Command          | What it does                                                     |
+| ---------------- | ---------------------------------------------------------------- |
+| `make`           | builds the demo cartridges into `demos/bin` (needs the DevTools) |
+| `make check`     | only compiles the headers and demos                              |
+| `make version`   | stamps `VERSION` and today's date into the headers               |
+| `make install`   | copies the headers into the DevTools' `include/` folder          |
+| `make uninstall` | removes them                                                     |
+
+The compiler tools (`compile`, `assemble`, `packrom`) are taken from
+`DEVTOOLS=<folder>` if given, then from the `PATH`. The headers are
+installed in the folder where the Vircon32 DevTools keep theirs
+(`/usr/local/Vircon32/DevTools/include` on Linux and macOS,
+`<prefix>/DevTools/include` on Windows; `PREFIX`, `INCDIR` and `DESTDIR`
+work as usual). The Vircon32 compiler has no `-I` option and finds the
+headers a program includes in that folder, so once they are installed a
+program only needs
+
+```
+#include "keyboard.h"
+```
+
+The demos in this folder include `"../keyboard.h"` instead, since they
+sit next to the headers in the source tree. Everything else (manual pages
+for each header and function, `man v32kbd_read`) is installed from the
+top of the project: see its README.
+
 ## DEMOS
 
 | File         | What it is                                              |
 | ------------ | ------------------------------------------------------- |
 | `v32kbd.c`   | keyboard test program: type text on screen              |
 | `v32mouse.c` | mouse test program: draw on screen                      |
+
+Both expect the device in **Gamepad 4** (port id 3), as their source says.
 
 A program  includes only the  driver(s) it  needs; each one  includes the
 core. Keyboard and  mouse can be used  at the same time, each  on its own
@@ -204,11 +244,40 @@ The other keys use these codes:
 | 6       | `LSHIFT`                        | 27      | `ESCAPE`                 |
 | 7       | `RSHIFT`                        | 28      | `LGUI` (left command)    |
 | 8       | `BACKSPACE`                     | 29      | `RGUI` (right command)   |
-| 9       | `TAB`                           | 30, 31  | unused                   |
+| 9       | `TAB`                           | 30, 31  | codepage prefixes, see [typed characters](#typed-characters) |
 | 10      | `LCTRL`                         | 127     | `DELETE`                 |
 
 Code 0  is never reported. Numeric  keypad keys report the  same codes as
 their main keyboard equivalents.
+
+### TYPED CHARACTERS
+
+Key codes say which key was pressed, not what it typed. That is enough
+for ASCII, but a computer's keyboard layout (or an AltGr or dead key) can
+type accented letters, a euro sign, and other characters the BIOS font
+has. For those the device sends the **character** itself, in the BIOS
+font's character set (Windows-1252, with box drawing characters in place
+of the codes 14 to 31), as 2 consecutive events:
+
+| Event | Key code | Meaning                                                      |
+| ----- | -------- | ------------------------------------------------------------ |
+| 1     | 30 or 31 | codepage **prefix**: 30 (`V32KEY_PAGE_HIGH`) is characters 128 to 255, 31 (`V32KEY_PAGE_LOW`) is characters 0 to 127 |
+| 2     | 0 to 127 | **payload**: the low 7 bits of the character                |
+
+so character = payload + 128 after `PAGE_HIGH`, and = payload after
+`PAGE_LOW` (a payload of 0 is valid: it is the euro sign on the high
+page). Both events are sent as key **releases**: a program built with the
+library from before this extension only sees 2 key releases (its
+`v32kbd_read()` skips releases; `v32kbd_readevent()` returns them as
+such), never a key press. This library accepts either action.
+If no payload follows a prefix within `V32KBD_PAGE_TIMEOUT` frames (30),
+the prefix is forgotten, and a gamepad being plugged in forgets it too.
+The key that typed a character is not reported as a key.
+
+The library queues the character as a `v32key` with the `text` flag set.
+See `docs/PROTOCOLS.md` for the choices that were considered, and
+`docs/COMPOSE.md` for how the hardware adapter (which sees keys, not
+layouts) lets you type them.
 
 ### API
 
@@ -236,9 +305,10 @@ The API  is the same as  before the split into  `v32io`; programs written
 for the previous `keyboard.h` keep working unchanged.
 
 - **`v32key` struct**: a single key event in the input list: `value` (key
-  code), `symbol` (typed character, with shift and caps lock applied as
-  they were when the key was pressed) and `pressed` (true for press,
-  false for release).
+  code, or for a typed character its BIOS font code), `symbol` (typed
+  character, with shift and caps lock applied as they were when the key
+  was pressed), `pressed` (true for press, false for release; always true
+  for a typed character) and `text` (true for a typed character).
 - **`v32kbd` struct**: a keyboard instance. It holds its `v32io` instance
   (`io`), the input list, the last strobe side seen, the caps lock state
   and which keys are held.
@@ -256,11 +326,19 @@ for the previous `keyboard.h` keep working unchanged.
 - **`v32kbd_read (v32kbd **)`**: returns the next key **press** (releases
   are skipped) as its typed character (compatible with the BIOS font).
   Keys with no character return their key code, which is always under 32
-  or 127. Returns 0 when there is nothing left to read.
+  or 127. A typed character comes as its BIOS font code (128 to 255, or
+  32 to 126), and one below 32 as that code plus `V32KBD_GLYPH` (256), so
+  that it can't be taken for a key code. Returns 0 when there is nothing
+  left to read.
+- **`v32kbd_glyph (int value)`**: from a value returned by `v32kbd_read()`
+  the BIOS font character to draw, or 0 when it is not a character (arrow
+  keys, function keys, Escape, Enter, Backspace...). Typically
+  `glyph = v32kbd_glyph (key); if (glyph > 0) { text[length] = glyph; ... }`.
 - **`v32kbd_readevent (v32kbd **, bool *pressed)`**: like `v32kbd_read()`
-  but it returns every event (presses and releases) as a key code, with
-  no shift applied. Use one or the other on a given keyboard: both take
-  events from the same list.
+  but it returns every key event (presses and releases) as a key code,
+  with no shift applied. Typed characters are not keys and are skipped.
+  Use one or the other on a given keyboard: both take events from the
+  same list.
 - **`v32kbd_isdown (v32kbd **, int keyval)`**: is the key held? For
   modifiers and game-like controls, e.g.
   `v32kbd_isdown (&keyboard, V32KEY_LCTRL)`.
@@ -419,4 +497,4 @@ are best  taken from EditControls,  which shows  them for the  plugged in
 device.
 
 The  test  programs  (`v32kbd.c`,  `v32mouse.c`)  expect  the  device  in
-**Gamepad 2** (id 1), leaving Gamepad 1 free for a regular gamepad.
+**Gamepad 4** (id 3), leaving the first gamepads free for regular ones.

@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32io library: "v32io.h"             File version: 2026/10/08
+// v32tools/v32io library: "v32io.h"             File version: 2026/10/14
 // ----------------------------------------------------------------------
 //
 // This file is the core of the v32io device family (v32kbd, v32mouse...)
@@ -36,6 +36,20 @@
 // protocols must be designed around this.
 //
 //////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// library version. This is stamped by `make version` from the VERSION file
+// at the top of the v32io project (do not edit by hand): VERSION is the
+// release date as YYYYMMDD, plus "-dev" or "-release"; VERSION_NUMBER is
+// the same date as a number, for comparisons at run time (Vircon32 C has
+// no #if):
+//
+//     if (V32IO_VERSION_NUMBER >= 20261014) { ... }
+//     print_at (0, 0, V32IO_VERSION);
+//
+#define V32IO_VERSION         "20261014-dev"
+#define V32IO_VERSION_NUMBER  20261014
 
 //////////////////////////////////////////////////////////////////////////////
 //

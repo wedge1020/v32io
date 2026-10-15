@@ -16,6 +16,7 @@ void main (void)
 {
     int             x         = 0;
     int             key       = 0;
+    int             glyph     = 0;
     int             last      = 0;
     int             length    = 0;
     int [TEXT_MAX+2] text;
@@ -41,6 +42,7 @@ void main (void)
         while (key           >  0)
         {
             last              = key;
+            glyph             = v32kbd_glyph (key);
 
             if (key          == V32KEY_BACKSPACE)
             {
@@ -67,9 +69,16 @@ void main (void)
                     }
                 }
 
-                else if ((key >= 32) && (key < 127))
+                //////////////////////////////////////////////////////////////
+                //
+                // Typed characters: ASCII, and (from a device that sends
+                // them) accented letters and box drawing characters of the
+                // BIOS font. v32kbd_glyph() gives the character to draw, or
+                // 0 for keys that have none (arrows, function keys...)
+                //
+                else if (glyph > 0)
                 {
-                    text[length]  = key;
+                    text[length]  = glyph;
                     length    = length + 1;
                 }
             }

@@ -73,6 +73,123 @@ pointer back to the system.
 
 ### Patch the stock DesktopEmulator
 
-On this  repository, under  the `emulator/`  directory, are  two `.patch`
+On this  repository, under  the `emulator/`  directory, are  three `.patch`
 files, to  be used for patching  in `v32kbd` and `v32mouse`  support into
-the stock Vircon32 DesktopEmulator.
+the stock Vircon32 DesktopEmulator (`v32kbd.patch`, `v32mouse.patch` and
+`v32kbd-text.patch`, applied in that order: see `emulator/README.md`).
+The last one makes `v32kbd` also send the *typed characters* described
+below; the other two work without it.
+
+## Typed characters
+
+Key codes identify keys, not what they type, so the accented letters, the
+euro sign and the box drawing characters of the Vircon32 BIOS font could
+not be typed. They can now: the device sends such a character as 2 events
+(a codepage prefix, using the key codes 30 and 31 that were unused, then
+the low 7 bits of the character), both as key releases so programs built
+with the older library just see releases and never a key press. In a
+program:
+
+```
+glyph = v32kbd_glyph (v32kbd_read (&keyboard));   // character to draw, or 0
+```
+
+* The patched **emulator** reports whatever the computer's keyboard layout
+  types (dead keys, AltGr...) if the BIOS font has it.
+* The **hardware adapter** has its own compose layer (AltGr, dead keys and
+  Alt codes on a US keyboard): see `docs/COMPOSE.md`. Its prebuilt
+  `firmware/RP2350-USB-A/v32io_pico.uf2` predates it and has to be rebuilt
+  to get it.
+
+Details and the alternatives that were considered: `docs/PROTOCOLS.md`.
+
+## Building and installing
+
+There is nothing to compile for the library itself: it is Vircon32 C
+headers. The project has a `Makefile` and, as an alternative that gives the
+same result, a `CMakeLists.txt`:
+
+```
+make                  # build the demo cartridges (lib/demos/bin)
+make test             # version stamps, manual pages and their examples
+make sysinstall       # headers, manual pages, documents (may need sudo)
+make sysuninstall
+make version          # show the version and stamp it (see below)
+make archive          # v32io-project.zip
+```
+
+```
+mkdir build && cd build
+cmake ..              # -DCMAKE_INSTALL_PREFIX=<dir> to install elsewhere
+cmake --build .
+ctest
+cmake --install .     # may need sudo
+cmake --build . --target uninstall
+cpack                 # .tar.gz / .deb / .rpm, or .zip on Windows
+```
+
+Both put (by default, with `/usr/local` as the prefix on Linux and macOS):
+
+| What                   | Where                                           |
+| ---------------------- | ----------------------------------------------- |
+| `v32io.h`, `keyboard.h`, `mouse.h` | `Vircon32/DevTools/include/`        |
+| manual pages (`3v32`)  | `share/man/man3/`                               |
+| README, docs, demos    | `Vircon32/v32tools/docs/v32io/`                 |
+
+The headers go in the **DevTools' `include/` folder** because that is where
+the Vircon32 compiler (which has no `-I` option) looks for the headers a
+program includes: afterwards a program says `#include "keyboard.h"` and
+that is all. On Windows (MSYS2/MinGW) the layout is `DevTools/include`
+under the Vircon32 folder, as the DevTools use. `PREFIX`, `DESTDIR`, and
+for CMake `-DV32IO_INSTALL_INCLUDEDIR=<dir>`, change it. `lib/Makefile`
+does the library part on its own (`make -C lib`, see `lib/README.md`).
+
+`make test` and `ctest` check that the version stamps agree and that the
+manual pages are well formed. With the Vircon32 DevTools around
+(`DEVTOOLS=<folder with compile>` or on the `PATH`), they also compile the
+examples in the manual pages and the demos. The end-to-end tests that run
+the firmware logic and the library on the console of the emulator are
+`make realcheck` (see `v32io-tests/README.md`).
+
+## Manual pages
+
+Each header has a manual page in section `3v32` (the one the Vircon32 C
+library uses), and so does every function, structure and constant:
+
+```
+man keyboard.h        man v32kbd_read        man V32KEY_PAGE_HIGH
+man mouse.h           man v32mouse_probe
+man v32io.h           man v32io             # overview
+```
+
+They are in `man/man3`; the alias pages are written by
+`tools/gen-manaliases.py` and checked by `tools/lint-man.py` (neither
+mandoc nor groff are needed for that).
+
+## Version
+
+`VERSION` holds the version: the release date as `YYYYMMDD`, then `-dev`
+or `-release` (now `20261014-dev`). `make version` stamps it, and today's
+date, into `lib/v32io.h` (`V32IO_VERSION` and `V32IO_VERSION_NUMBER`, which
+programs can read), the `File version` banner of each header and the
+`.TH` line of every manual page. To release:
+
+```
+make version VERSION=20261101-release
+```
+
+(this also writes `VERSION`). CMake, `cpack` and the package names read the
+same file.
+
+## Layout
+
+| Folder           | What is in it                                            |
+| ---------------- | -------------------------------------------------------- |
+| `lib/`           | the Vircon32 C library (headers, demos), `lib/Makefile`  |
+| `man/man3/`      | manual pages                                             |
+| `docs/`          | protocol reference, typing special characters            |
+| `firmware/`      | RP2350-USB-A adapter firmware                            |
+| `emulator/`      | DesktopEmulator patches                                  |
+| `v32io-tests/`   | end-to-end tests                                         |
+| `tools/`         | character table generator, manual page tools, checks     |
+| `cmake/`         | the CMake uninstall script                               |

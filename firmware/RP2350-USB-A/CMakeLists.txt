@@ -27,6 +27,7 @@ add_executable(v32io_pico
     src/main.c
     src/kbd.c
     src/keymap.c
+    src/compose.c
     src/mouse.c
     src/led.c
     src/usb_descriptors.c

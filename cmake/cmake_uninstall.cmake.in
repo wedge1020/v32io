@@ -1,0 +1,50 @@
+# ----------------------------------------------------------------------------
+#   `cmake  --build  .  --target  uninstall`: removes every file the last
+#   `cmake     --install`    of    this    build    tree    wrote    (its
+#   install_manifest.txt),  then the v32io directories that leaves empty
+#   --  and  v32tools/, DevTools/ (and, on Linux / macOS, Vircon32/) only
+#   if nothing else is left in them, since the DevTools, v32c++, v32opt and
+#   v32lua share them.
+# ----------------------------------------------------------------------------
+
+set(MANIFEST "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt")
+if(NOT EXISTS "${MANIFEST}")
+    message(FATAL_ERROR "Nothing to uninstall: ${MANIFEST} not found (run cmake --install first)")
+endif()
+
+# The manifest names the paths as installed, without the DESTDIR that a
+# staged install (`DESTDIR=/stage cmake --install .`) put in front of them:
+# give the same DESTDIR to remove a staged install.
+set(DESTDIR "$ENV{DESTDIR}")
+
+file(STRINGS "${MANIFEST}" FILES)
+foreach(FILE IN LISTS FILES)
+    set(FILE "${DESTDIR}${FILE}")
+    if(EXISTS "${FILE}" OR IS_SYMLINK "${FILE}")
+        message(STATUS "Removing ${FILE}")
+        file(REMOVE "${FILE}")
+    endif()
+endforeach()
+
+# Deepest first; each only if empty.
+set(PREFIX "@CMAKE_INSTALL_PREFIX@")
+foreach(DIR
+        "${PREFIX}/@V32IO_INSTALL_DOCDIR@/demos"
+        "${PREFIX}/@V32IO_INSTALL_DOCDIR@"
+        "@V32IO_UNINSTALL_MAN3@"
+        "@V32IO_HEADER_PATH@"
+        "@V32IO_HEADER_PARENT@"
+        "${PREFIX}/@V32IO_TOOLS_ROOT@/docs"
+        "${PREFIX}/@V32IO_TOOLS_ROOT@"
+        "@V32IO_UNIX_VIRCON32_DIR@")
+    if(DIR)
+        set(DIR "${DESTDIR}${DIR}")
+    endif()
+    if(DIR AND IS_DIRECTORY "${DIR}")
+        file(GLOB LEFT "${DIR}/*")
+        if(NOT LEFT)
+            message(STATUS "Removing empty directory ${DIR}")
+            file(REMOVE_RECURSE "${DIR}")
+        endif()
+    endif()
+endforeach()

@@ -8,6 +8,7 @@
 
 #include <string.h>
 #include "v32kbd.h"
+#include "compose.h"
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -34,12 +35,16 @@ static bool setup_mode = false;
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// Queue of pending key events
+// Queue of pending key events. A typed character (extended characters, see
+// v32kbd.h) takes 2 events, a codepage prefix and its payload: the payload
+// is marked as "continued" so that the pair is never split when old events
+// are discarded
 //
 typedef struct
 {
     uint8_t code;
     bool    pressed;
+    bool    continued;    // payload of the codepage prefix before it
 }
 key_event_t;
 
@@ -47,17 +52,60 @@ static key_event_t queue[ QUEUE_SIZE ];
 static unsigned    queue_head = 0;      // next to read
 static unsigned    queue_tail = 0;      // next to write
 
+// discards the oldest event (with its payload, if it has one)
+static void queue_discard_oldest( void )
+{
+    queue_head = (queue_head + 1) & (QUEUE_SIZE - 1);
+
+    while( queue_head != queue_tail && queue[ queue_head ].continued )
+      queue_head = (queue_head + 1) & (QUEUE_SIZE - 1);
+}
+
+static void queue_push_raw( uint8_t code, bool pressed, bool continued )
+{
+    queue[ queue_tail ].code      = code;
+    queue[ queue_tail ].pressed   = pressed;
+    queue[ queue_tail ].continued = continued;
+    queue_tail = (queue_tail + 1) & (QUEUE_SIZE - 1);
+}
+
+// The event at the head of the queue may be the payload of a prefix that was
+// already sent: it must be sent too, or the program would take the next event
+// for its payload. Then the oldest event can't be discarded, and the new one
+// is what is lost instead (all this only happens with a full queue)
+static bool queue_make_room( unsigned needed )
+{
+    while( ((queue_tail + needed) & (QUEUE_SIZE - 1)) == queue_head
+        || ((queue_tail + 1)      & (QUEUE_SIZE - 1)) == queue_head )
+    {
+        if( queue_head != queue_tail && queue[ queue_head ].continued )
+          return false;
+
+        queue_discard_oldest();
+    }
+
+    return true;
+}
+
 static void queue_push( uint8_t code, bool pressed )
 {
-    unsigned next = (queue_tail + 1) & (QUEUE_SIZE - 1);
+    if( queue_make_room( 1 ) )
+      queue_push_raw( code, pressed, false );
+}
 
-    // when full, discard the oldest event
-    if( next == queue_head )
-      queue_head = (queue_head + 1) & (QUEUE_SIZE - 1);
+// a typed character, as a BIOS font code: codepage prefix, then payload. Both
+// are sent as key RELEASES so that libraries that predate the extension
+// ignore them (see keyboard.h)
+static void queue_push_char( uint8_t character )
+{
+    bool high = (character >= 128);
 
-    queue[ queue_tail ].code    = code;
-    queue[ queue_tail ].pressed = pressed;
-    queue_tail = next;
+    // room for both (or none is queued)
+    if( !queue_make_room( 2 ) )
+      return;
+
+    queue_push_raw( high? V32KEY_PAGE_HIGH : V32KEY_PAGE_LOW, false, false );
+    queue_push_raw( (uint8_t)( character & 0x7F ),            false, true  );
 }
 
 static bool queue_pop( key_event_t* event )
@@ -93,6 +141,7 @@ static void protocol_reset( void )
 void kbd_reset( void )
 {
     setup_mode = false;
+    compose_reset();
     protocol_reset();
 }
 
@@ -132,10 +181,24 @@ static void key_changed( uint8_t usage, bool pressed )
         return;
     }
 
-    uint8_t code = v32kbd_keycode( usage );
+    // the compose layer decides what this key change is: an ordinary key
+    // event, typed characters (AltGr, dead keys, Alt codes), or nothing
+    compose_out_t out;
+    compose_key( usage, pressed, &out );
 
-    if( code != V32KEY_NONE )
-      queue_push( code, pressed );
+    for( int i = 0; i < out.count; i++ )
+    {
+        if( out.act[i].kind == COMPOSE_CHAR )
+          queue_push_char( out.act[i].code );
+
+        else
+        {
+            uint8_t code = v32kbd_keycode( usage );
+
+            if( code != V32KEY_NONE )
+              queue_push( code, pressed );
+        }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////

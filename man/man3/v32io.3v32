@@ -1,0 +1,131 @@
+.TH V32IO 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.SH NAME
+v32io \- keyboard and mouse for Vircon32 programs, through gamepad ports
+.SH SYNOPSIS
+.nf
+.B #include \(dqkeyboard.h\(dq
+.B #include \(dqmouse.h\(dq
+.fi
+.SH DESCRIPTION
+The Vircon32 console has gamepads and nothing else to give input with. The
+v32io project adds more devices by carrying their data on the 11 controls of
+a gamepad: a program that knows the encoding reads a gamepad port and sees a
+keyboard, or a mouse. This page is the overview of the C library a program
+uses for that. It has three headers:
+.TP
+.BR v32io.h (3v32)
+The core. Reads one gamepad and packs its 11 controls as the bits of an
+integer; knows nothing of what they mean. Included by the other two.
+.TP
+.BR keyboard.h (3v32)
+.B v32kbd
+\(em a keyboard: key presses and releases by key code, typed text with shift
+and caps lock applied, and typed characters outside ASCII (accented letters
+and box drawing characters of the BIOS font).
+.TP
+.BR mouse.h (3v32)
+.B v32mouse
+\(em a mouse: a pointer with a position, the movement of each frame, and
+three buttons.
+.PP
+Every function and structure has its own page that opens the page of the
+header it belongs to, so
+.B "man v32kbd_read"
+and
+.B "man v32mouse_probe"
+work.
+.SS The devices
+.TP
+.B Emulator
+The Vircon32 DesktopEmulator with the v32io patches (in the project's
+.I emulator
+directory) has the devices
+.B v32kbd
+and
+.B v32mouse
+in its Gamepads menu, which use the keyboard and the mouse of the computer.
+Select one for the gamepad port the program reads. The keyboard cannot be used
+at the same time as the emulator's own keyboard gamepad.
+.TP
+.B Adapter
+The RP2350\-USB\-A firmware (in the
+.I firmware
+directory) runs on a Raspberry Pi Pico 2 type board. A USB keyboard or mouse is
+connected to it, and it presents itself to the computer that runs the
+emulator as a USB gamepad. Real hardware, a different path to the same
+program.
+.PP
+In both cases the program sees a gamepad. Nothing in the program says which
+one it is.
+.SS Programs
+A program creates a device on a gamepad port, calls its
+.B probe
+function once on every frame, and then reads what happened:
+.PP
+.RS
+.nf
+#include "keyboard.h"
+
+void main()
+{
+    v32kbd* keyboard = v32kbd_init( SECOND_GAMEPAD_PORT );
+    int key = 0;
+
+    while( true )
+    {
+        v32kbd_probe( &keyboard );
+        key = v32kbd_read( &keyboard );
+        while( key > 0 )
+        {
+            /* use the key */
+            key = v32kbd_read( &keyboard );
+        }
+        end_frame();
+    }
+}
+.fi
+.RE
+.PP
+There is nothing to link. The headers are installed beside the Vircon32
+DevTools headers, so
+.BR compile (1)
+finds them with a plain
+.B #include \(dqkeyboard.h\(dq
+and no options, and it compiles only the functions that the program calls.
+.SS Where things are
+After the project is installed (see the
+.I README
+of the project):
+.TP
+.I Vircon32/DevTools/include
+The headers, in the directory where the DevTools put theirs
+.RI ( /usr/local/Vircon32/DevTools/include
+on Linux and macOS, and
+.I DevTools/include
+under the install folder on Windows).
+.TP
+.I /usr/local/share/man/man3
+These manual pages.
+.TP
+.I Vircon32/v32tools/docs/v32io
+The documentation of the project, the protocol description and the example
+programs.
+.SS Version
+.B V32IO_VERSION
+and
+.B V32IO_VERSION_NUMBER
+(see
+.BR v32io.h (3v32))
+give the version of the headers a program was built with. The date and
+version at the head of this page tell the version of the manual.
+.SH SEE ALSO
+.BR v32io.h (3v32),
+.BR keyboard.h (3v32),
+.BR mouse.h (3v32),
+.BR vircon32 (3v32),
+.BR input.h (3v32),
+.BR compile (1)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

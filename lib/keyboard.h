@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32kbd library: "keyboard.h"         File version: 2026/10/08
+// v32tools/v32kbd library: "keyboard.h"         File version: 2026/10/14
 // ----------------------------------------------------------------------
 //
 // This file contains all definitions and functions needed by programs to
@@ -34,6 +34,30 @@
 // to 'z', '0' to '9',  space and ` - = [ ] \ ; '  , . /). Other keys use
 // the V32KEY_  codes defined below. Shift  and caps lock are  applied by
 // this library, to obtain the typed character (symbol) for each key.
+//
+// EXTENDED CHARACTERS: key codes identify keys, so they can't tell what a
+// key typed when that is not an ASCII character (an accented letter from
+// a dead key or AltGr, a box drawing character...). For these, the device
+// can send a typed CHARACTER instead, in the character set of the BIOS font
+// (Windows-1252, with box drawing characters in place of codes 14 to 31).
+// It takes 2 consecutive events: a codepage PREFIX, whose key code is one
+// of the 2 that were left unused, and then the PAYLOAD, which carries the
+// low 7 bits of the character in the key code field:
+//
+//   V32KEY_PAGE_HIGH (30) + payload  ->  character 128 + payload (128-255)
+//   V32KEY_PAGE_LOW  (31) + payload  ->  character payload       (0-127)
+//
+// Both events are sent as key RELEASES, so a library that predates this
+// extension sees two key releases (which its v32kbd_read() skips) instead
+// of misreading the payload as a key press. This library accepts either
+// action. Payload 0 is valid (it is the
+// euro sign on the high page). The prefix is dropped if no payload follows
+// it within V32KBD_PAGE_TIMEOUT frames.
+//
+// v32kbd_read() returns these characters like any other: their BIOS font
+// code (128 to 255 for the high page, 32 to 126 for ASCII). For the codes
+// below 32, which collide with key codes, it adds V32KBD_GLYPH: use
+// v32kbd_glyph() to obtain the code to draw from any v32kbd_read() value.
 //
 // The design of v32kbd is such that allows for multiple instances, if it
 // is desired to have more than one keyboard present.
@@ -73,6 +97,8 @@
 #define V32KEY_ESCAPE      27
 #define V32KEY_LGUI        28  // left command on Mac, Windows key on PC
 #define V32KEY_RGUI        29  // right command on Mac
+#define V32KEY_PAGE_HIGH   30  // codepage prefix: BIOS characters 128-255
+#define V32KEY_PAGE_LOW    31  // codepage prefix: BIOS characters 0-127
 #define V32KEY_DELETE     127
 
 //////////////////////////////////////////////////////////////////////////////
@@ -91,6 +117,9 @@
 //
 #define V32KBD_KEYS       128  // number of possible key codes
 #define V32KBD_MAXQUEUE    64  // max. events waiting to be read
+#define V32KBD_GLYPH      256  // added by v32kbd_read() to typed characters
+                               // below 32 (box drawing...): see v32kbd_glyph()
+#define V32KBD_PAGE_TIMEOUT 30 // frames a codepage prefix waits for its payload
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -99,10 +128,14 @@
 //
 struct v32key
 {
-    int     value;    // key code of the key (see V32KEY_ definitions)
+    int     value;    // key code of the key (see V32KEY_ definitions); for
+                      // a typed character (text), its BIOS font code
     int     symbol;   // typed character (shift applied); same as value
                       // for keys that have no character
     bool    pressed;  // true: key was pressed, false: it was released
+                      // (always true for a typed character)
+    bool    text;     // true: this is a typed character sent by the device
+                      // (extended characters), not a key
     v32key *next;
 };
 
@@ -119,6 +152,9 @@ struct v32kbd
     int     gamepad;   // id of gamepad being used as a v32 keyboard
     int     lastread;  // contains frame of last received key event
     int     strobe;    // last strobe side seen (0: none, 1: left, 2: right)
+    int     page;      // codepage prefix waiting for its payload (0: none,
+                       // else V32KEY_PAGE_HIGH or V32KEY_PAGE_LOW)
+    int     pageframe; // frame at which that prefix was received
     bool    capslock;  // caps lock state (toggles when it is pressed)
     bool [V32KBD_KEYS]    held;     // which keys are currently pressed
 };
@@ -138,6 +174,7 @@ bool    v32kbd_probe     (v32kbd **keyboard);              // check for input
 int     v32kbd_read      (v32kbd **keyboard);              // read next key press
 int     v32kbd_readevent (v32kbd **keyboard, bool *pressed); // read next event
 bool    v32kbd_isdown    (v32kbd **keyboard, int keyval);  // is key held now?
+int     v32kbd_glyph     (int      value);                 // character to draw
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -153,6 +190,7 @@ v32key *v32key_newkey (int  keyval)
         newkey -> value   = keyval;
         newkey -> symbol  = keyval;
         newkey -> pressed = true;
+        newkey -> text    = false;
         newkey -> next    = NULL;
     }
 
@@ -192,6 +230,8 @@ v32kbd *v32kbd_init (int  gamepad)
         keyboard -> gamepad   = gamepad;
         keyboard -> lastread  = -1;
         keyboard -> strobe    = 0;
+        keyboard -> page      = 0;
+        keyboard -> pageframe = 0;
         keyboard -> capslock  = false;
 
         for (index            = 0;
@@ -382,7 +422,10 @@ bool v32kbd_probe (v32kbd **keyboard)
     // Declare and initialize local variables
     //
     bool     result                = false;
+    bool     handled               = false;
     int      keyval                = 0;
+    int      character             = 0;
+    int      frame                 = 0;
     int      raw                   = 0;
     int      side                  = 0;
     v32kbd  *kbd                   = NULL;
@@ -406,6 +449,19 @@ bool v32kbd_probe (v32kbd **keyboard)
 
         //////////////////////////////////////////////////////////////////////
         //
+        // A gamepad that has just been connected shows every control
+        // released, so the history of the device is lost: the strobe
+        // starts over (the first event will be a new one, whatever side it
+        // is) and a codepage prefix that was waiting won't get its payload
+        //
+        if (v32io_plugged (&(kbd -> io)))
+        {
+            kbd -> strobe           = 0;
+            kbd -> page             = 0;
+        }
+
+        //////////////////////////////////////////////////////////////////////
+        //
         // There is a new key event when the strobe side has changed
         // (side is 1 for left,  2 for right,  0 before any events)
         //
@@ -414,10 +470,69 @@ bool v32kbd_probe (v32kbd **keyboard)
             (side                  != kbd -> strobe))
         {
             kbd -> strobe           = side;
-            kbd -> lastread         = get_frame_counter ();
+            frame                   = get_frame_counter ();
+            kbd -> lastread         = frame;
             keyval                  = (raw >> V32KBD_CODE_SHIFT) & V32KBD_CODE_MASK;
 
-            if (keyval             >  0)
+            //////////////////////////////////////////////////////////////////
+            //
+            // A codepage prefix is waiting: this event is its payload (any
+            // key code, including 0 and the prefix codes themselves, and
+            // whatever the action). A prefix that has waited too long was
+            // lost with its payload: forget it and read this event as a
+            // regular one
+            //
+            if (kbd -> page        != 0)
+            {
+                if ((frame - kbd -> pageframe) <= V32KBD_PAGE_TIMEOUT)
+                {
+                    handled         = true;
+                    result          = true;
+                    character       = keyval;
+                    if (kbd -> page == V32KEY_PAGE_HIGH)
+                    {
+                        character   = keyval + 128;
+                    }
+                    kbd -> page     = 0;
+
+                    //////////////////////////////////////////////////////////
+                    //
+                    // Queue the character (character 0 is nothing), unless
+                    // nobody is reading them
+                    //
+                    if ((character >  0) &&
+                        (kbd -> count < V32KBD_MAXQUEUE))
+                    {
+                        key         = v32key_newkey (character);
+                        if (key    != NULL)
+                        {
+                            key -> text  = true;
+                            v32kbd_addkey (keyboard, key);
+                        }
+                    }
+                }
+                else
+                {
+                    kbd -> page     = 0;
+                }
+            }
+
+            //////////////////////////////////////////////////////////////////
+            //
+            // Codepage prefixes carry no key: they announce that the next
+            // event is a character
+            //
+            if ((handled          == false) &&
+                ((keyval          == V32KEY_PAGE_HIGH) ||
+                 (keyval          == V32KEY_PAGE_LOW)))
+            {
+                handled             = true;
+                kbd -> page         = keyval;
+                kbd -> pageframe    = frame;
+            }
+
+            if ((handled          == false) &&
+                (keyval           >  0))
             {
                 result              = true;
 
@@ -459,7 +574,8 @@ bool v32kbd_probe (v32kbd **keyboard)
 // v32kbd_readevent(): obtain next key event from keyboard input list (if
 // available). Returns the key code (not the symbol), or 0 if there is no
 // event. If pressed is not NULL, it is set to true (press) or false
-// (release)
+// (release). Typed characters (extended characters) are not keys, so they
+// are skipped; read them with v32kbd_read() or v32kbd_getkey()
 //
 int  v32kbd_readevent (v32kbd **keyboard, bool *pressed)
 {
@@ -469,6 +585,13 @@ int  v32kbd_readevent (v32kbd **keyboard, bool *pressed)
     if (*keyboard                != NULL)
     {
         oldkey                    = v32kbd_getkey (keyboard);
+        while ((oldkey           != NULL) &&
+               (oldkey -> text))
+        {
+            free (oldkey);
+            oldkey                = v32kbd_getkey (keyboard);
+        }
+
         if (oldkey               != NULL)
         {
             keyval                = oldkey   -> value;
@@ -488,8 +611,11 @@ int  v32kbd_readevent (v32kbd **keyboard, bool *pressed)
 //
 // v32kbd_read(): obtain next key PRESS from keyboard input list, skipping
 // any key releases. Returns the typed character (compatible with the BIOS
-// font regions) or, for keys with no character, their key code. Returns 0
-// when there are no more key presses to read
+// font regions) or, for keys with no character, their key code. Typed
+// characters sent by the device (extended characters) are returned too:
+// as their BIOS font code, or for codes below 32 (which are also key codes)
+// that code plus V32KBD_GLYPH. Use v32kbd_glyph() to turn any returned
+// value into the code to draw. Returns 0 when there is nothing left to read
 //
 int  v32kbd_read  (v32kbd **keyboard)
 {
@@ -505,6 +631,11 @@ int  v32kbd_read  (v32kbd **keyboard)
             if (oldkey -> pressed)
             {
                 keyval            = oldkey   -> symbol;
+                if ((oldkey -> text) &&
+                    (keyval      <  32))
+                {
+                    keyval        = keyval + V32KBD_GLYPH;
+                }
             }
             free (oldkey);
             oldkey                = NULL;
@@ -536,6 +667,35 @@ bool v32kbd_isdown (v32kbd **keyboard, int  keyval)
     }
 
     return (result);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// v32kbd_glyph(): from a value returned by v32kbd_read(), obtain the BIOS
+// font character to draw (the region number print_at() uses), or 0 if the
+// value is not a typed character: a key with no character (arrows, F keys,
+// escape, delete...) or no key at all. This is what tells apart a key code
+// below 32 from a box drawing character with the same code
+//
+int  v32kbd_glyph (int  value)
+{
+    int     glyph                 = 0;
+
+    if (((value                  >= 32)  &&
+         (value                  <  127)) ||
+        ((value                  >= 128) &&
+         (value                  <  256)))
+    {
+        glyph                     = value;
+    }
+
+    else if ((value              >  V32KBD_GLYPH) &&
+             (value              <  (V32KBD_GLYPH + 32)))
+    {
+        glyph                     = value - V32KBD_GLYPH;
+    }
+
+    return (glyph);
 }
 
 #endif

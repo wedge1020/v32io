@@ -44,7 +44,22 @@
 #define V32KEY_ESCAPE     27
 #define V32KEY_LGUI       28
 #define V32KEY_RGUI       29
+#define V32KEY_PAGE_HIGH  30   // codepage prefixes, see below
+#define V32KEY_PAGE_LOW   31
 #define V32KEY_DELETE    127
+
+// Typed characters (extended characters). Key codes identify keys, so a
+// character that is not an ASCII key (an accented letter, a box drawing
+// character...) is sent as 2 consecutive events, using the 2 key codes that
+// were left unused as a codepage prefix:
+//
+//   V32KEY_PAGE_HIGH + payload  ->  BIOS font character 128 + payload
+//   V32KEY_PAGE_LOW  + payload  ->  BIOS font character payload
+//
+// The payload is the key code field of the second event (0 is valid). Both
+// events are key RELEASES, so that libraries that predate this extension
+// see releases, never a key press. See lib/keyboard.h for how the library reads them, and
+// compose.h for how this firmware gets to send them.
 
 // converts a USB HID keyboard usage (page 7) into a v32kbd
 // key code; returns V32KEY_NONE for keys that are not supported

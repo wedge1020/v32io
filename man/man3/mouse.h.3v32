@@ -1,0 +1,213 @@
+.TH MOUSE.H 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.SH NAME
+mouse.h \- v32mouse: read a mouse through a gamepad port
+.SH SYNOPSIS
+.nf
+.B #include \(dqmouse.h\(dq
+.PP
+.BI "v32mouse* v32mouse_init( int " gamepad " );"
+.BI "void      v32mouse_free( v32mouse** " mouse " );"
+.PP
+.BI "bool      v32mouse_probe( v32mouse** " mouse " );"
+.BI "void      v32mouse_position( v32mouse** " mouse ", int* " x ", int* " y " );"
+.BI "void      v32mouse_delta( v32mouse** " mouse ", int* " dx ", int* " dy " );"
+.BI "bool      v32mouse_isdown( v32mouse** " mouse ", int " button " );"
+.BI "bool      v32mouse_pressed( v32mouse** " mouse ", int " button " );"
+.BI "bool      v32mouse_released( v32mouse** " mouse ", int " button " );"
+.PP
+.BI "void      v32mouse_setposition( v32mouse** " mouse ", int " x ", int " y " );"
+.BI "void      v32mouse_setbounds( v32mouse** " mouse ", int " minx ", int " miny ", int " maxx ", int " maxy " );"
+.BI "void      v32mouse_setscale( v32mouse** " mouse ", int " scale " );"
+.PP
+.BI "int       v32mouse_counter( int " raw ", int " negative ", int " positive ", int " high ", int " low " );"
+.BI "int       v32mouse_steps( int " before ", int " after " );"
+.fi
+.SH DESCRIPTION
+A v32mouse is a mouse that presents itself to the console as a gamepad
+(see
+.BR v32io.h (3v32)).
+The emulator provides one with the host's mouse, and the RP2350-USB-A adapter
+provides one with a real USB mouse. This header decodes it into a pointer
+with a position, the movement of each frame and the state of three buttons.
+.PP
+The buttons are reported as they are, held for as long as they are:
+Start is the middle button, A the left button and B the right button.
+.PP
+Movement is not reported as amounts, which a gamepad has no way to carry,
+but as the position of two
+.IR counters ,
+one per axis, that go around a cycle of 12 positions. A step moves a counter
+one position, forward (right or down) or backward (left or up), and each step
+changes exactly one control, so the gamepad is never seen halfway between two
+positions. Every frame the library compares the counters with their
+previous positions and obtains the movement in steps. A counter is a 2-bit
+Gray code (four groups of three positions) with a trit on a pair of opposite
+directions, negative, none, positive, that is walked backwards in odd groups:
+.PP
+.nf
+position:  0  1  2 | 3  4  5 | 6  7  8 | 9 10 11
+gray:        00    |   01    |   11    |   10
+trit:      -  0  + | +  0  - | -  0  + | +  0  -
+.fi
+.PP
+The X counter uses Left and Right for its trit and X and Y for its Gray
+code; the Y counter uses Up and Down, and L and R. After power on the device
+shows position 1 on both (no control pressed).
+.PP
+Since the cycle has 12 positions, a movement of 6 steps could not be told
+from \-6, so a device must not move a counter more than 5 steps between two
+frames: the adapter paces its steps for that, and the emulator moves a counter
+5 steps per frame at the most. This limits how fast the pointer can go.
+.PP
+The program calls
+.B v32mouse_probe
+.B once on every frame
+for each mouse. If frames are skipped, movement can be lost or misread.
+.SS The pointer
+The library keeps a pointer that starts at the center of the screen
+(320, 180), moves by the movement of each frame multiplied by the
+.IR scale ,
+pixels per step (2 by default), and is kept within its bounds (the screen, 640
+by 360, by default).
+.SH FUNCTIONS
+.TP
+.BI "v32mouse_init( int " gamepad )
+Create a mouse on the given gamepad port (see the port ids in
+.BR v32io.h (3v32)),
+or return
+.B NULL
+if memory runs out. Movement is measured from the position the counters have
+at that moment.
+.TP
+.BI "v32mouse_free( v32mouse** " mouse )
+Release the mouse and set the pointer to
+.BR NULL .
+.TP
+.BI "v32mouse_probe( v32mouse** " mouse )
+Check for input, updating the buttons, the movement of this frame and the
+pointer. Returns true if the mouse moved or any button changed. If the
+gamepad has just been connected or is not connected the movement is 0,
+since the counters then say nothing of the real position.
+.TP
+.BI "v32mouse_position( v32mouse** " mouse ", int* " x ", int* " y )
+Store the pointer position. Either pointer may be
+.BR NULL .
+.TP
+.BI "v32mouse_delta( v32mouse** " mouse ", int* " dx ", int* " dy )
+Store the movement of the latest probe, in pixels (steps multiplied by the
+scale). It is not limited by the bounds, so it is useful for a game that
+needs relative movement. Either pointer may be
+.BR NULL .
+.TP
+.BI "v32mouse_isdown( v32mouse** " mouse ", int " button )
+True if the button is held; with several in the mask (add them),
+true if any is.
+.TP
+.BI "v32mouse_pressed( v32mouse** " mouse ", int " button )
+True if the button went down in the latest probe.
+.TP
+.BI "v32mouse_released( v32mouse** " mouse ", int " button )
+True if the button went up in the latest probe.
+.TP
+.BI "v32mouse_setposition( v32mouse** " mouse ", int " x ", int " y )
+Place the pointer. It is kept within the bounds.
+.TP
+.BI "v32mouse_setbounds( v32mouse** " mouse ", int " minx ", int " miny ", int " maxx ", int " maxy )
+Set the area the pointer can move in (the limits are included). The pointer
+is moved into it if it is outside.
+.TP
+.BI "v32mouse_setscale( v32mouse** " mouse ", int " scale )
+Set the pixels the pointer moves per step.
+.TP
+.BI "v32mouse_counter( int " raw ", int " negative ", int " positive ", int " high ", int " low )
+Decode a counter: given the packed controls and the masks of the four controls
+it uses, the position, 0 to 11, or \-1 if the controls do not make a valid
+position. Used by
+.BR v32mouse_probe ;
+the X counter is
+.BR "V32MOUSE_X_NEGATIVE, V32MOUSE_X_POSITIVE, V32MOUSE_X_HIGH, V32MOUSE_X_LOW" .
+.TP
+.BI "v32mouse_steps( int " before ", int " after )
+The movement, \-5 to 5 steps, from one counter position to another. A
+difference of 6 cannot be told from \-6 and is taken as no movement.
+.SH VARIABLES
+.TP
+.B struct v32mouse
+A mouse instance. A program should not need to touch its fields; they are
+.IR io ", " gamepad ", " countx ", " county ", " stepx ", " stepy ", " dx ", " dy ,
+.IR x ", " y ", " minx ", " miny ", " maxx ", " maxy ", " scale ", " buttons ,
+.IR down ", " up " and " lastread .
+.TP
+.BR V32MOUSE_LEFT ", " V32MOUSE_RIGHT ", " V32MOUSE_MIDDLE ", " V32MOUSE_ANY
+The mouse buttons (1, 2, 4) and all of them (7), as the functions take them.
+.TP
+.BR V32MOUSE_X_NEGATIVE ", " V32MOUSE_X_POSITIVE ", " V32MOUSE_Y_NEGATIVE ", " V32MOUSE_Y_POSITIVE
+Masks of the trit controls in the packed controls (1, 2, 4, 8).
+.TP
+.BR V32MOUSE_BTN_MIDDLE ", " V32MOUSE_BTN_LEFT ", " V32MOUSE_BTN_RIGHT
+Masks of the button controls in the packed controls (16, 32, 64).
+.TP
+.BR V32MOUSE_X_HIGH ", " V32MOUSE_X_LOW ", " V32MOUSE_Y_HIGH ", " V32MOUSE_Y_LOW
+Masks of the Gray code controls in the packed controls (128, 256, 512, 1024).
+.TP
+.B V32MOUSE_POSITIONS
+12, the positions in a counter cycle.
+.TP
+.B V32MOUSE_SCALE
+2, the default pixels per step.
+.TP
+.BR V32MOUSE_SCREEN_W ", " V32MOUSE_SCREEN_H
+640 and 360, the default bounds.
+.SH EXAMPLES
+Draw a dot where the left button is held, and clear when the right one is
+pressed:
+.PP
+.RS
+.nf
+#include "video.h"
+#include "mouse.h"
+
+void main()
+{
+    v32mouse* mouse = v32mouse_init( SECOND_GAMEPAD_PORT );
+    int x = 0;
+    int y = 0;
+
+    while( true )
+    {
+        v32mouse_probe( &mouse );
+        v32mouse_position( &mouse, &x, &y );
+
+        if( v32mouse_pressed( &mouse, V32MOUSE_RIGHT ) )
+            clear_screen( color_black );
+
+        if( v32mouse_isdown( &mouse, V32MOUSE_LEFT ) )
+        {
+            set_multiply_color( color_white );
+            select_texture( -1 );
+            select_region( 46 );
+            draw_region_at( x, y );
+        }
+
+        end_frame();
+    }
+}
+.fi
+.RE
+.SH NOTES
+A mouse that moves faster than the device can carry does not wrap around or
+move backwards: the device holds back what it cannot send, and drops what is
+left when the backlog is too long, so the pointer stops soon after the mouse
+does.
+.PP
+A mouse and a keyboard are different devices on different gamepad ports:
+connect each one to its own port.
+.SH SEE ALSO
+.BR v32io.h (3v32),
+.BR keyboard.h (3v32),
+.BR v32io (3v32),
+.BR input.h (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).

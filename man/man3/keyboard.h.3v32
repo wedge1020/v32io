@@ -1,0 +1,325 @@
+.TH KEYBOARD.H 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.SH NAME
+keyboard.h \- v32kbd: read a keyboard through a gamepad port
+.SH SYNOPSIS
+.nf
+.B #include \(dqkeyboard.h\(dq
+.PP
+.BI "v32kbd* v32kbd_init( int " gamepad " );"
+.BI "void    v32kbd_free( v32kbd** " keyboard " );"
+.PP
+.BI "bool    v32kbd_probe( v32kbd** " keyboard " );"
+.BI "int     v32kbd_read( v32kbd** " keyboard " );"
+.BI "int     v32kbd_readevent( v32kbd** " keyboard ", bool* " pressed " );"
+.BI "int     v32kbd_glyph( int " value " );"
+.BI "bool    v32kbd_isdown( v32kbd** " keyboard ", int " key " );"
+.PP
+.BI "v32key* v32kbd_getkey( v32kbd** " keyboard " );"
+.BI "int     v32kbd_symbol( v32kbd* " keyboard ", int " key " );"
+.BI "int     v32kbd_addkey( v32kbd** " keyboard ", v32key* " key " );"
+.BI "v32key* v32key_newkey( int " key " );"
+.BI "int     v32kbd_scan( v32kbd* " keyboard " );"
+.fi
+.SH DESCRIPTION
+A v32kbd is a keyboard that presents itself to the console as a gamepad
+(see
+.BR v32io.h (3v32)).
+The emulator provides one with the host's keyboard, and the RP2350-USB-A
+adapter provides one with a real USB keyboard. This header decodes it into
+key events, and keeps the state of the keys and of caps lock, so a program
+can read typed text or poll keys like a game.
+.PP
+The device reports
+.B one event per frame
+at the most, and holds it until the next one. The Left and Right controls
+are a strobe that switches side with every new event, so an event is
+recognized as new when the side differs from the last seen. The other
+controls carry the event:
+.PP
+.nf
+Left / Right  strobe (Left first)
+Up            the key was pressed
+Down          the key was released
+Start, A, B, X, Y, L, R   key code, bits 0 to 6
+.fi
+.PP
+The program calls
+.B v32kbd_probe
+.B once on every frame
+for each keyboard. Events that arrive faster than they are read wait in a
+queue of up to
+.B V32KBD_MAXQUEUE
+(64); while it is full new events are dropped.
+.SS Key codes
+A key code identifies a
+.I key
+(shift is not part of it). Keys with an ASCII character use it as their code,
+as typed on a US layout with no shift:
+.BR a " to " z ,
+.BR 0 " to " 9 ,
+space, and
+.B "` \- = [ ] \e ; ' , . /"
+The other keys have these codes:
+.PP
+.nf
+V32KEY_NONE       0       V32KEY_ENTER      13
+V32KEY_UP         1       V32KEY_F1         14   (F1 to F12 are 14 to 25)
+V32KEY_DOWN       2       V32KEY_F12        25
+V32KEY_LEFT       3       V32KEY_RALT       26
+V32KEY_RIGHT      4       V32KEY_ESCAPE     27
+V32KEY_CAPSLOCK   5       V32KEY_LGUI       28
+V32KEY_LSHIFT     6       V32KEY_RGUI       29
+V32KEY_RSHIFT     7       V32KEY_PAGE_HIGH  30   (see below)
+V32KEY_BACKSPACE  8       V32KEY_PAGE_LOW   31   (see below)
+V32KEY_TAB        9       V32KEY_DELETE    127
+V32KEY_LCTRL     10
+V32KEY_RCTRL     11
+V32KEY_LALT      12
+.fi
+.PP
+LALT, RALT, LGUI and RGUI are the Option and Command keys on a Mac.
+.SS Typed characters
+The key code of a key cannot say what the key typed when that is not
+ASCII: an accented letter, a euro sign, a box drawing character. For
+these the device can send the
+.I character
+itself, in the character set of the BIOS font (Windows\-1252, with
+box drawing characters in the place of codes 14 to 31).
+.PP
+A character takes two consecutive events. The first is a
+.IR "codepage prefix" ,
+one of the two key codes that were left unused; the second, the
+.IR payload ,
+carries the low 7 bits of the character in its key code field (0 is a valid
+payload):
+.PP
+.nf
+V32KEY_PAGE_HIGH + payload   character 128 + payload   (128 to 255)
+V32KEY_PAGE_LOW  + payload   character payload         (0 to 127)
+.fi
+.PP
+Both events are sent as key
+.I releases
+so a program built with a library from before this extension sees two
+key releases (which its
+.B v32kbd_read
+skips) instead of a key press. This library takes either action.
+A prefix that is not followed by its payload within
+.B V32KBD_PAGE_TIMEOUT
+(30) frames is forgotten.
+.PP
+Typed characters appear in the queue as events with the
+.I text
+flag set. They are returned by
+.B v32kbd_read
+and
+.BR v32kbd_getkey ,
+and skipped by
+.BR v32kbd_readevent ,
+because they are not keys. On a character sent as text the key that typed it
+is not reported at all.
+.SS Which characters
+ASCII characters come from the keys as always, with
+.B v32kbd_symbol
+applying shift and caps lock for a US layout. The emulator additionally
+reports whatever the host's own keyboard layout types, if the BIOS font has
+the character. The RP2350\-USB\-A adapter, which only sees which keys are
+pressed, has its own way of typing them: AltGr and dead keys, and Alt codes
+on the numeric keypad (see
+.I docs/COMPOSE.md
+in the v32io project).
+.SH FUNCTIONS
+.TP
+.BI "v32kbd_init( int " gamepad )
+Create a keyboard on the given gamepad port (see the port ids in
+.BR v32io.h (3v32)),
+or return
+.B NULL
+if memory runs out. An event the device was holding at that moment is not
+read as new.
+.TP
+.BI "v32kbd_free( v32kbd** " keyboard )
+Release a keyboard and any events waiting in it, and set the pointer to
+.BR NULL .
+.TP
+.BI "v32kbd_probe( v32kbd** " keyboard )
+Check for input. Returns true if an event or a typed character was received
+in this frame.
+.TP
+.BI "v32kbd_read( v32kbd** " keyboard )
+The next key
+.IR press ,
+skipping releases, or 0 if nothing is left. The value is the
+.I symbol
+of the key: for a key with an ASCII character, the character with shift
+and caps lock applied (so \(aqA\(aq, \(aq!\(aq...); for any other key its key code. A typed character
+is returned as its BIOS font code (128 to 255, or 32 to 126), and a typed character
+below 32 as that code plus
+.B V32KBD_GLYPH
+(256), so it cannot be confused with a key code. Pass the value to
+.B v32kbd_glyph
+to know what to draw.
+.TP
+.BI "v32kbd_glyph( int " value )
+For a value returned by
+.BR v32kbd_read ,
+the BIOS font character to draw, or 0 if it is not a character. That is the
+case for keys with no character (arrows, F keys, Escape, Delete, Backspace,
+Enter, Tab...) and for 0. Values 32 to 126, and those from typed characters, are
+characters; so are 128 to 255. This is the function that tells a box
+drawing character (value 256 + code) from a key with the same code.
+.TP
+.BI "v32kbd_readevent( v32kbd** " keyboard ", bool* " pressed )
+The next key event, press or release, as its key code (not the symbol), or
+0 if there is none. If
+.I pressed
+is not
+.B NULL
+it is set to true for a press. Typed characters are skipped. Use this for
+games that need to know when a key is released.
+.TP
+.BI "v32kbd_isdown( v32kbd** " keyboard ", int " key )
+True while the key with that code is held (keys are tracked as the events
+arrive, not as they are read). For modifiers and game controls.
+.TP
+.BI "v32kbd_getkey( v32kbd** " keyboard )
+Take the next
+.I v32key
+from the queue, or return
+.B NULL
+if it is empty. The caller must
+.B free
+it. The v32key has everything about the event: use it to read typed
+characters apart from keys.
+.TP
+.BI "v32kbd_symbol( v32kbd* " keyboard ", int " key )
+The character a key code types with the current state of shift and caps
+lock (US layout): letters invert with caps lock, numbers and punctuation
+follow shift only. Keys that have no character return their key code.
+.TP
+.BI "v32kbd_addkey( v32kbd** " keyboard ", v32key* " key )
+Append a key event to the queue. Returns 1 on success. Used by
+.BR v32kbd_probe ;
+a program can use it to inject events.
+.TP
+.BI "v32key_newkey( int " key )
+Allocate a v32key for the key code: a press, with the symbol equal to the code,
+and not text.
+.TP
+.BI "v32kbd_scan( v32kbd* " keyboard )
+Read the packed controls of the keyboard's gamepad right away
+(see
+.BR v32io_scan ).
+Kept for compatibility.
+.SH VARIABLES
+.TP
+.B struct v32key
+One event in the queue.
+.nf
+int     value;    key code; for text, the BIOS font code
+int     symbol;   typed character with shift applied
+bool    pressed   true: pressed, false: released
+bool    text;     true: a typed character, not a key
+v32key* next;
+.fi
+.TP
+.B struct v32kbd
+A keyboard instance. A program should not need to touch its fields; they are
+.IR io ", " input ", " data ", " count ", " gamepad ", " lastread ", " strobe ,
+.IR page ", " pageframe ", " capslock " and the table " held .
+.TP
+.BR V32KBD_STROBE ", " V32KBD_PRESSED ", " V32KBD_RELEASED
+Masks of the strobe (3), the press (4) and the release (8) controls in the
+packed controls.
+.TP
+.BR V32KBD_CODE_SHIFT ", " V32KBD_CODE_MASK
+The key code is at bit 4 of the packed controls (4) and is 7 bits long
+(127).
+.TP
+.B V32KBD_KEYS
+128, the number of key codes.
+.TP
+.B V32KBD_MAXQUEUE
+64, events that can wait to be read.
+.TP
+.B V32KBD_GLYPH
+256, added by
+.B v32kbd_read
+to typed characters below 32.
+.TP
+.B V32KBD_PAGE_TIMEOUT
+30, frames a codepage prefix waits for its payload.
+.SH EXAMPLES
+Collect typed text on a line, accented letters included, and draw it.
+.B print_at
+draws each value of the text as the BIOS font character with that code, so the
+glyphs from
+.B v32kbd_glyph
+can be stored in it as they are.
+.PP
+.RS
+.nf
+#include "video.h"
+#include "keyboard.h"
+
+void main()
+{
+    v32kbd* keyboard = v32kbd_init( SECOND_GAMEPAD_PORT );
+    int [100] line;
+    int length = 0;
+    int key = 0;
+    int glyph = 0;
+
+    line[ 0 ] = 0;
+
+    while( true )
+    {
+        v32kbd_probe( &keyboard );
+
+        key = v32kbd_read( &keyboard );
+        while( key > 0 )
+        {
+            glyph = v32kbd_glyph( key );
+
+            if( glyph > 0 && length < 98 )
+            {
+                line[ length ] = glyph;
+                length = length + 1;
+                line[ length ] = 0;
+            }
+            else if( key == V32KEY_BACKSPACE && length > 0 )
+            {
+                length = length - 1;
+                line[ length ] = 0;
+            }
+
+            key = v32kbd_read( &keyboard );
+        }
+
+        clear_screen( color_black );
+        print_at( 10, 10, line );
+        end_frame();
+    }
+}
+.fi
+.RE
+.SH NOTES
+Call
+.B v32kbd_probe
+on every frame; a skipped frame can lose an event. A keyboard on a gamepad
+port that is disconnected and connected again starts over: pending events and
+a waiting prefix are forgotten.
+.PP
+The keyboard is a gamepad, so a gamepad on the same port cannot be used at
+the same time. The emulator uses the host's keyboard for either its normal
+keyboard gamepad or v32kbd, but not for both.
+.SH SEE ALSO
+.BR v32io.h (3v32),
+.BR mouse.h (3v32),
+.BR v32io (3v32),
+.BR input.h (3v32),
+.BR video.h (3v32)
+.SH AUTHOR
+Matthew Haas, for the v32io project. The Vircon32 standard library it builds
+on was written by Javier Carracedo
+.RI ( Carra ).
