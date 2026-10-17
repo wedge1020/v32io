@@ -1,6 +1,6 @@
 # Vircon32 DesktopEmulator patches
 
-Each  component of  this project  has  its own  patch set  for the  stock
+Each  component of  this project  has  its own  patch  for the  stock
 Vircon32  DesktopEmulator (the  `ComputerSoftware` repository).  They are
 independent; apply the ones you need.
 

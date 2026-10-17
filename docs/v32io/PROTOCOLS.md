@@ -82,7 +82,7 @@ character p (0 to 127, in practice the glyphs 14 to 31). Payload 0 is valid
 
 Where characters come from:
 
-* **Emulator** (`v32kbd-text.patch`): SDL's `SDL_TEXTINPUT`, i.e. whatever
+* **Emulator** (`emulator/v32io/v32io.patch`): SDL's `SDL_TEXTINPUT`, i.e. whatever
   the operating system's layout types. An ASCII key press is held back for
   one frame at the most, until the text it typed (if any) is known. If the
   text is a BIOS glyph that is not ASCII, the key press is replaced by the

@@ -19,8 +19,8 @@ patch -R -p0 < v32dev.patch             # to take it out again
 It     changes    only     `DesktopEmulator/ConsoleLogic/V32Console.cpp`,
 `V32Console.hpp`,            `V32MemoryCardController.cpp`            and
 `V32MemoryCardController.hpp`:  no  other  source file,  nothing  in  the
-GUI  or  the  settings,  so  it   should  coexist  with  the  v32kbd  and
-v32mouse patches  (which touch `GamepadsInput.*`,  `Main.cpp`, `GUI.cpp`,
+GUI  or  the  settings,  so  it   should  coexist  with  the  v32io
+patch  (which touches `GamepadsInput.*`,  `Main.cpp`, `GUI.cpp`,
 `Settings.cpp`).
 
 What it does (details in `docs/v32dev/PROTOCOL.md`, section 2):

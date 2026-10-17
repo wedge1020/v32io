@@ -33,7 +33,7 @@ The conduit outside the console is one of:
   mouse to the computer as a USB gamepad. It works with any Vircon32 emulator,
   stock or modified, which does not know it is anything but a gamepad. See
   [`firmware/RP2350-USB-A/README.md`](firmware/RP2350-USB-A/README.md).
-* **The emulator patches**: a modified DesktopEmulator that has `v32kbd` and
+* **The emulator patch** (`v32io.patch`): a modified DesktopEmulator that has `v32kbd` and
   `v32mouse` in its Gamepads menu and uses the keyboard and mouse of the
   computer, with no hardware. See
   [`emulator/v32io/README.md`](emulator/v32io/README.md).

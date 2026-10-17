@@ -464,7 +464,7 @@ while (true)
 ### MODIFIED DESKTOP EMULATOR
 
 Open menu Gamepads, pick a gamepad  and select `v32kbd` or `v32mouse`
-(the patches and the ready-made fork are described in
+(the patch and the ready-made fork are described in
 `emulator/v32io/README.md`).
 
 NOTE: The `v32kbd`  emulated device cannot be selected  while any gamepad
