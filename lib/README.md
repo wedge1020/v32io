@@ -9,7 +9,7 @@ README at the top of the project for installing one or both.
 
 | Folder | Library | Headers | What it gives a program | Needs |
 | --- | --- | --- | --- | --- |
-| [`v32io/`](v32io/README.md) | v32io | `v32io.h`, `keyboard.h`, `mouse.h` | a keyboard and a mouse, read through gamepad ports | the RP2350-USB-A adapter, or an emulator with the v32io patches |
+| [`v32io/`](v32io/README.md) | v32io | `v32io.h`, `keyboard.h`, `mouse.h` | a keyboard and a mouse, read through gamepad ports | an RP2350-USB-A / -USB-C / -USB-CM adapter, or an emulator with the v32io patches |
 | [`v32dev/`](v32dev/README.md) | v32dev | `v32dev.h`, `storage.h`, `serial.h` | files of the host, a terminal (later a network), through the memory card | an emulator with the v32dev patch, and `tools/v32dev.py` |
 
 Each folder has its own README (the full description of that library), its

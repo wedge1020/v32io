@@ -12,7 +12,7 @@ at a time.
 | --- | --- | --- |
 | What it gives a program | a keyboard and a mouse | files of the host, a terminal, later a network |
 | Carried by | the 11 controls of a gamepad port | the memory card (a mailbox in its last 64 KiB) |
-| Needs | the RP2350-USB-A adapter *or* an emulator with the v32io patches | an emulator with the v32dev patch, and the host tool |
+| Needs | an RP2350-USB-A / -USB-C / -USB-CM adapter *or* an emulator with the v32io patches | an emulator with the v32dev patch, and the host tool |
 | Works on real hardware | yes (with the adapter) | no (it is an emulator feature) |
 | C drivers | `v32io.h`, `keyboard.h`, `mouse.h` | `v32dev.h`, `storage.h`, `serial.h` |
 | Manual | `man v32io` | `man v32dev` |
@@ -28,11 +28,19 @@ typed characters outside ASCII) and `v32mouse` (a pointer with three buttons).
 
 The conduit outside the console is one of:
 
-* **The hardware adapter**: firmware for a Waveshare RP2350-USB-A (a Pi Pico 2
-  class board, with its R13 resistor removed) that presents a USB keyboard or
-  mouse to the computer as a USB gamepad. It works with any Vircon32 emulator,
-  stock or modified, which does not know it is anything but a gamepad. See
-  [`firmware/RP2350-USB-A/README.md`](firmware/RP2350-USB-A/README.md).
+* **The hardware adapter**: firmware for a Waveshare RP2350 board (a Pi Pico 2
+  class board) that presents a USB keyboard or mouse to the computer as a USB
+  gamepad. It works with any Vircon32 emulator, stock or modified, which does
+  not know it is anything but a gamepad. Three boards are supported, all with
+  the same gamepad and the same behavior:
+
+  | Board | Computer end | Keyboard / mouse end | Read first |
+  | --- | --- | --- | --- |
+  | RP2350-USB-A | type C receptacle (native) | type A (PIO host; R13 removed) | [`firmware/RP2350-USB-A/README.md`](firmware/RP2350-USB-A/README.md) |
+  | RP2350-USB-C | type C receptacle (native) | type C receptacle (PIO host; R13 removed) | [`firmware/RP2350-USB-C/README.md`](firmware/RP2350-USB-C/README.md) |
+  | RP2350-USB-CM | type C **plug** (PIO device) | type C receptacle (native host) | [`firmware/RP2350-USB-CM/README.md`](firmware/RP2350-USB-CM/README.md) |
+
+  On the -CM the ports have the opposite roles to the other two.
 * **The emulator patch** (`v32io.patch`): a modified DesktopEmulator that has `v32kbd` and
   `v32mouse` in its Gamepads menu and uses the keyboard and mouse of the
   computer, with no hardware. See
@@ -75,8 +83,8 @@ that a part can be found, installed or left out on its own.
 | `docs/v32io/`, `docs/v32dev/` | protocol references (v32io: protocols, typing special characters; v32dev: the protocol) |
 | `emulator/v32io/`, `emulator/v32dev/` | the DesktopEmulator patches of each component |
 | `tests/v32io/`, `tests/v32dev/` | the end-to-end tests of each component; see `tests/README.md` |
-| `firmware/` | RP2350-USB-A adapter firmware (v32io only) |
-| `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); the manual page and version tools, which serve both |
+| `firmware/` | RP2350-USB-A, -USB-C and -USB-CM adapter firmware (v32io only) |
+| `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); `check-firmware-sync.sh` (v32io); the manual page and version tools, which serve both |
 | `cmake/` | the CMake uninstall script |
 
 ## Building and installing

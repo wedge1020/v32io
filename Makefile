@@ -31,7 +31,7 @@
 #   sysuninstall-both. `make sysuninstall` removes what COMPONENTS names.
 #
 #   PREFIX (default /usr/local) and DESTDIR (for packaging) work as usual.
-#   The firmware (firmware/RP2350-USB-A) and the DesktopEmulator patches
+#   The firmware (firmware/RP2350-USB-A, -USB-C, -USB-CM) and the DesktopEmulator patches
 #   (emulator/v32io, emulator/v32dev) are built on their own: see their
 #   README files.
 # ----------------------------------------------------------------------------
