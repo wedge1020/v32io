@@ -303,7 +303,7 @@ uninstall-component:
 # without it a directory stores only its own entry and the archive silently
 # ships empty folders.
 archive: clean
-	COPYFILE_DISABLE=1 zip -r -X v32io-project.zip * -x $(ARCHIVE_EXCLUDE)
+	COPYFILE_DISABLE=1 zip -r -X ../v32io-project.zip * -x $(ARCHIVE_EXCLUDE)
 
 tarball: clean
 	COPYFILE_DISABLE=1 tar --exclude='tests/v32io/build' --exclude='lib/*/demos/build' \
@@ -314,6 +314,6 @@ tarball: clean
 clean:
 	for c in $(ALL_COMPONENTS); do $(MAKE) -C $(LIBDIR)/$$c clean; done
 	rm -rf tests/v32io/build build
-	rm -f *.zip *.tar.gz
+	rm -f *.zip *.tar.gz ../v32io-project.zip
 # The cartridges in lib/*/demos/bin are part of the source tree (so they can
 # be used without the DevTools); `make` rebuilds them.
