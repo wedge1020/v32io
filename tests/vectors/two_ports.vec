@@ -1,0 +1,19 @@
+# Two keyboards at once on port ids 1 and 2: each has its own strobe.
+[actions]
+connect 1 1
+connect 2 1
+kbd 1 press x
+kbd 2 press y
+kbd 1 release x
+[expect]
+0 1 key down 120
+1 2 key down 121
+2 1 key up 120
+
+[frames]
+0 1 10100001111
+0 2 00000000000
+1 1 10100001111
+1 2 10101001111
+2 1 01010001111
+2 2 10101001111

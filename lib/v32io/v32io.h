@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32io library: "v32io.h"             File version: 2026/10/14
+// v32tools/v32io library: "v32io.h"             File version: 2026/11/05
 // ----------------------------------------------------------------------
 //
 // This file is the core of the v32io device family (v32kbd, v32mouse...)
@@ -48,8 +48,8 @@
 //     if (V32IO_VERSION_NUMBER >= 20261014) { ... }
 //     print_at (0, 0, V32IO_VERSION);
 //
-#define V32IO_VERSION         "20261014-dev"
-#define V32IO_VERSION_NUMBER  20261014
+#define V32IO_VERSION         "20261105-dev"
+#define V32IO_VERSION_NUMBER  20261105
 
 //////////////////////////////////////////////////////////////////////////////
 //

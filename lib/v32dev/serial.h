@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32dev library: "serial.h"           File version: 2026/10/15
+// v32tools/v32dev library: "serial.h"           File version: 2026/11/05
 // ----------------------------------------------------------------------
 //
 // This file contains all definitions and functions needed by programs to

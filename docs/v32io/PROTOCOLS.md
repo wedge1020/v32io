@@ -31,9 +31,11 @@ later, hold 34 ms. Setup mode: Scroll Lock, F1-F11 = buttons 0-10.
   - X: trit Left(-)/Right(+), Gray X(high) Y(low). Y: trit Up(-)/Down(+), Gray L(high) R(low).
   - position 0..11 -> gray 00 00 00 01 01 01 11 11 11 10 10 10, trit - 0 + + 0 - - 0 + + 0 -
   - rest = position 1 (nothing pressed). Decode: group g from Gray, pos = 3g + (g even ? t : 2-t).
-- Program reads delta mod 12 in -5..+5 (6 = ambiguous, taken as 0). Firmware: 4 counts/step, >= 5 ms between steps (from delivery), backlog 6 steps. A whole skipped frame at full speed can alias; MOUSE_STEP_MS=7 prevents it (143 steps/s).
+- Program reads delta mod 12 in -5..+5 (6 = ambiguous, taken as 0). **At most 5 steps per axis per frame is part of the protocol** (mouse.h), not an implementation detail: counters are modulo 12, so +6 and -6 cannot be told apart. Encoders (emulator, firmware, v32sim) must clamp or carry over the excess. Firmware: 4 counts/step, >= 5 ms between steps (from delivery), backlog 6 steps. A whole skipped frame at full speed can alias; MOUSE_STEP_MS=7 prevents it (143 steps/s).
 - 1152 states = 8 button combos x 12 x 12: no room for the wheel.
 - Setup mode: hold L+M+R 2 s; each left click presses the next gamepad button (0..10), right click goes back one.
+
+- Status: the v32mouse event queue (carrying movement over frames) is not implemented in any emulator yet; v32sim will emulate it (VS-11). `tools/v32io-encode.py` and `tests/vectors/` are the reference for bit patterns.
 
 ## Firmware mode selection
 

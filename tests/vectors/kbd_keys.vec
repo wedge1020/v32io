@@ -1,0 +1,42 @@
+# Plain keys on port 1: a tap, a held key, a named key, the same key twice (the strobe tells them apart).
+[actions]
+connect 1 1
+kbd 1 tap a
+kbd 1 press lctrl
+kbd 1 tap c
+kbd 1 release lctrl
+kbd 1 tap enter
+kbd 1 tap f1
+kbd 1 tap a
+kbd 1 tap a
+[expect]
+0 1 key down 97
+1 1 key up 97
+2 1 key down 10
+3 1 key down 99
+4 1 key up 99
+5 1 key up 10
+6 1 key down 13
+7 1 key up 13
+8 1 key down 14
+9 1 key up 14
+10 1 key down 97
+11 1 key up 97
+12 1 key down 97
+13 1 key up 97
+
+[frames]
+0 1 10101000011
+1 1 01011000011
+2 1 10100101000
+3 1 01101100011
+4 1 10011100011
+5 1 01010101000
+6 1 10101011000
+7 1 01011011000
+8 1 10100111000
+9 1 01010111000
+10 1 10101000011
+11 1 01011000011
+12 1 10101000011
+13 1 01011000011

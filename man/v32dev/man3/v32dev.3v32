@@ -1,4 +1,4 @@
-.TH V32DEV 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.TH V32DEV 3v32 "November 5, 2026" "v32dev 20261105-dev" "Vircon32 C Library"
 .SH NAME
 v32dev \- files, a terminal and other devices for Vircon32 programs, through the memory card
 .SH SYNOPSIS

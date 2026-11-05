@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32dev library: "v32dev.h"           File version: 2026/10/15
+// v32tools/v32dev library: "v32dev.h"           File version: 2026/11/05
 // ----------------------------------------------------------------------
 //
 // This file is the core of the v32dev device family (storage, serial,

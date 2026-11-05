@@ -84,7 +84,7 @@ that a part can be found, installed or left out on its own.
 | `emulator/v32io/`, `emulator/v32dev/` | the DesktopEmulator patches of each component |
 | `tests/v32io/`, `tests/v32dev/` | the end-to-end tests of each component; see `tests/README.md` |
 | `firmware/` | RP2350-USB-A, -USB-C and -USB-CM adapter firmware (v32io only) |
-| `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); `check-firmware-sync.sh` (v32io); the manual page and version tools, which serve both |
+| `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); `v32io-encode.py`, the reference protocol encoder (v32io; vectors in `tests/vectors/`); `check-firmware-sync.sh` (v32io); the manual page and version tools, which serve both |
 | `cmake/` | the CMake uninstall script |
 
 ## Building and installing

@@ -1,4 +1,4 @@
-.TH V32IO 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.TH V32IO 3v32 "November 5, 2026" "v32io 20261105-dev" "Vircon32 C Library"
 .SH NAME
 v32io \- keyboard and mouse for Vircon32 programs, through gamepad ports
 .SH SYNOPSIS

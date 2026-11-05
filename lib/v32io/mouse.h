@@ -3,7 +3,7 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32mouse library: "mouse.h"          File version: 2026/10/14
+// v32tools/v32mouse library: "mouse.h"          File version: 2026/11/05
 // ----------------------------------------------------------------------
 //
 // This file contains all definitions and functions needed by programs to

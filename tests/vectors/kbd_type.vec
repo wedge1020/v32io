@@ -1,0 +1,31 @@
+# Typed text: shift is a key of its own, pressed around the shifted character; \n is Enter.
+[actions]
+connect 1 1
+kbd 1 type Hi!\n
+[expect]
+0 1 key down 6
+1 1 key down 104
+2 1 key up 104
+3 1 key up 6
+4 1 key down 105
+5 1 key up 105
+6 1 key down 6
+7 1 key down 49
+8 1 key up 49
+9 1 key up 6
+10 1 key down 13
+11 1 key up 13
+
+[frames]
+0 1 10100110000
+1 1 01100001011
+2 1 10010001011
+3 1 01010110000
+4 1 10101001011
+5 1 01011001011
+6 1 10100110000
+7 1 01101000110
+8 1 10011000110
+9 1 01010110000
+10 1 10101011000
+11 1 01011011000

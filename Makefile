@@ -124,6 +124,7 @@ check: test
 test:
 	@sh $(TOOLS)/check-version.sh
 	@python3 $(TOOLS)/lint-man.py all
+	@python3 tests/vectors/check.py
 	@dt="$(DEVTOOLS)"; [ -n "$$dt" ] || { p=`command -v compile 2>/dev/null` && dt=`dirname "$$p"`; }; \
 	if [ -n "$$dt" ] && [ -x "$$dt/compile" ]; then \
 	    python3 $(TOOLS)/lint-man.py --compile "$$dt" all || exit 1; \

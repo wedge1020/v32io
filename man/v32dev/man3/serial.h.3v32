@@ -1,4 +1,4 @@
-.TH SERIAL.H 3v32 "October 15, 2026" "v32dev 20261014-dev" "Vircon32 C Library"
+.TH SERIAL.H 3v32 "November 5, 2026" "v32dev 20261105-dev" "Vircon32 C Library"
 .SH NAME
 serial.h \- v32dev serial: a terminal-like stream of words with the host
 .SH SYNOPSIS

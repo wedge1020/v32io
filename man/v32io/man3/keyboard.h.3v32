@@ -1,4 +1,4 @@
-.TH KEYBOARD.H 3v32 "October 14, 2026" "v32io 20261014-dev" "Vircon32 C Library"
+.TH KEYBOARD.H 3v32 "November 5, 2026" "v32io 20261105-dev" "Vircon32 C Library"
 .SH NAME
 keyboard.h \- v32kbd: read a keyboard through a gamepad port
 .SH SYNOPSIS

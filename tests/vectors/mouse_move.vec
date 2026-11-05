@@ -1,0 +1,21 @@
+# Mouse movement is a pair of counters; at most 5 steps per axis per frame, so a longer move spans frames.
+# A move of 12 is a full turn of the counter and cannot be seen; -12 likewise (the protocol's limit).
+[actions]
+connect 2 1
+mouse 2 move 3 -2
+mouse 2 move 7 4
+mouse 2 move -5 0
+mouse 2 move 0 5
+[expect]
+0 2 mouse 3 -2
+1 2 mouse 5 4
+2 2 mouse 2 0
+3 2 mouse -5 0
+4 2 mouse 0 5
+
+[frames]
+0 2 00100000110
+1 2 01010001001
+2 2 10010001001
+3 2 10010001101
+4 2 10010001111

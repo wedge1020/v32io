@@ -1,0 +1,16 @@
+# Typed characters: a codepage prefix (30 = characters 128-255, 31 = 0-127) and a payload, both key releases.
+[actions]
+connect 1 1
+kbd 1 char 233 0x80 65
+[expect]
+1 1 char 233
+3 1 char 128
+5 1 char 65
+
+[frames]
+0 1 10010111100
+1 1 01011001011
+2 1 10010111100
+3 1 01010000000
+4 1 10011111100
+5 1 01011000001

@@ -1,0 +1,29 @@
+# Mouse buttons are Start (middle), A (left) and B (right); a click is down, two frames, up.
+[actions]
+connect 2 1
+mouse 2 click left
+mouse 2 down right
+mouse 2 move 1 1
+mouse 2 up right
+mouse 2 click middle
+[expect]
+0 2 mouse down left
+3 2 mouse up left
+4 2 mouse down right
+5 2 mouse 1 1
+6 2 mouse up right
+7 2 mouse down middle
+10 2 mouse up middle
+
+[frames]
+0 2 00000100000
+1 2 00000100000
+2 2 00000100000
+3 2 00000000000
+4 2 00000010000
+5 2 01010010000
+6 2 01010000000
+7 2 01011000000
+8 2 01011000000
+9 2 01011000000
+10 2 01010000000
