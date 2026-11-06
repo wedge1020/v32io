@@ -12,7 +12,7 @@ at a time.
 | --- | --- | --- |
 | What it gives a program | a keyboard and a mouse | files of the host, a terminal, later a network |
 | Carried by | the 11 controls of a gamepad port | the memory card (a mailbox in its last 64 KiB) |
-| Needs | an RP2350-USB-A / -USB-C / -USB-CM adapter *or* an emulator with the v32io patches | an emulator with the v32dev patch, and the host tool |
+| Needs | an RP2350-USB-A / -USB-C / -USB-CM adapter *or* an emulator with the v32io patches | an emulator with the v32dev patch, and the host tool *or* the v32dev-server patch (a host built into the emulator) |
 | Works on real hardware | yes (with the adapter) | no (it is an emulator feature) |
 | C drivers | `v32io.h`, `keyboard.h`, `mouse.h` | `v32dev.h`, `storage.h`, `serial.h` |
 | Manual | `man v32io` | `man v32dev` |
@@ -71,6 +71,12 @@ The quick start, the API at a glance and the host tool are in
 of the layout and the protocol in
 [`docs/v32dev/PROTOCOL.md`](docs/v32dev/PROTOCOL.md).
 
+The host does not have to be a separate program: a second patch,
+[`emulator/v32dev-server/`](emulator/v32dev-server/README.md), builds it into the
+DesktopEmulator. Its **Memory card → v32dev server** menu puts a file of the
+computer, or a terminal (standard input and output, or a local TCP port), on each
+channel, on any card, with nothing to format and no `v32dev.py` to run.
+
 ## Layout
 
 Everything that belongs to one component is under a folder of its name, so
@@ -81,7 +87,7 @@ that a part can be found, installed or left out on its own.
 | `lib/v32io/`, `lib/v32dev/` | the Vircon32 C libraries (headers, demos, a `Makefile` and a README each); `lib/README.md` is the index |
 | `man/v32io/man3/`, `man/v32dev/man3/` | the manual pages of each component, section `3v32` |
 | `docs/v32io/`, `docs/v32dev/` | protocol references (v32io: protocols, typing special characters; v32dev: the protocol) |
-| `emulator/v32io/`, `emulator/v32dev/` | the DesktopEmulator patches of each component |
+| `emulator/v32io/`, `emulator/v32dev/`, `emulator/v32dev-server/` | the DesktopEmulator patches (`v32dev-server` is an addition to `v32dev`: the host built into the emulator) |
 | `tests/v32io/`, `tests/v32dev/` | the end-to-end tests of each component; see `tests/README.md` |
 | `firmware/` | RP2350-USB-A, -USB-C and -USB-CM adapter firmware (v32io only) |
 | `tools/` | `v32dev.py`, the v32dev host tool; the character table generator (v32io); `v32io-encode.py`, the reference protocol encoder (v32io; vectors in `tests/vectors/`); `check-firmware-sync.sh` (v32io); the manual page and version tools, which serve both |

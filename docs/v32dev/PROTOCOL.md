@@ -16,7 +16,7 @@ needs the emulator patch.
 | Layer | Where | What it does |
 |---|---|---|
 | Transport | emulator patch (`emulator/v32dev/v32dev.patch`) | Keeps the mailbox region of the card in sync with the file, in an order that is safe to read. Moves words; knows nothing else. |
-| Device core | `lib/v32dev/v32dev.h`, `tools/v32dev.py` | Channels, device types (class and kind), opening, liveness, streams and messages. |
+| Device core | `lib/v32dev/v32dev.h`, `tools/v32dev.py` (or the host built into the emulator, section 5.1) | Channels, device types (class and kind), opening, liveness, streams and messages. |
 | Device drivers | `lib/v32dev/storage.h`, `lib/v32dev/serial.h`, later `network.h`, `netplay.h` | What a class of device means (sectors, characters, connections). |
 
 A program includes only the drivers it needs; each includes `v32dev.h`, the same
@@ -300,6 +300,32 @@ Devices for `serve`: `storage:FILE[,bytes][,ro][,sector=N][,create=SECTORS]`,
 to a mailbox unless `--force` is given. Do not format a card that an emulator has
 loaded.
 
+### 5.1 The host built into the emulator
+
+`emulator/v32dev-server/v32dev-server.patch` (on top of `v32dev.patch`) puts a
+host inside the emulator. It speaks this protocol as `tools/v32dev.py` does, on
+the same devices (`storage:`, `serial:echo`, `serial:stdio`) plus `serial:tcp=PORT`
+(a character device that is a TCP port of the local computer, loopback only), and
+a program cannot tell the two apart. What differs is where the host runs:
+
+- It serves the card **memory**, in the frame loop, at the start of each frame,
+  where the other host reads and writes the file. So the file rules of section 2
+  (write order, 256-word pages, the host never writing between frames) are not
+  needed: nothing the program or the host writes in the mailbox reaches the card
+  file while the server is on, and the host-owned area is never read from it.
+- The mailbox header can be put in card memory by the emulator when the card is
+  not formatted, as long as the last 64 KiB hold nothing (all zero). To the program
+  it is the same live mailbox (the header, and the emulator heartbeat).
+- The host heartbeat is incremented every frame (the other host does it about every
+  10 ms), the host session changes each time a channel is served again, and the
+  program's open handshake and restarts work as in 3.3. The host never trusts
+  the program's ring indices: out of range ones are ignored (and counted), and a
+  message with an impossible length empties what was received.
+- Which device is on which channel is chosen in the emulator (its Memory card menu,
+  its settings, or `V32DEV_SERVER` and `V32DEV_CH0` to `V32DEV_CH3`), and a program can
+  only reach what was chosen there, which is the policy rule of 4.4 as it applies
+  to the other host's command line.
+
 ## 6. Tests
 
 `tests/v32dev/run.sh <ComputerSoftware with the patch applied>` builds the patched console code and runs:
@@ -315,6 +341,18 @@ loaded.
    word checked on both sides), byte mode and read only, no host, no mailbox,
    mailbox disabled, wrong device class, a host that is killed and comes back, a
    5000-word stream through a ring that holds 2023.
+
+With the v32dev-server patch also applied, `run.sh` adds (the numbers are what the
+current tests check, the same scenarios run against both hosts):
+
+1b. unit tests of the built-in host on the real console classes (174 checks): specs,
+   a mailbox that exists only in memory, what is and is not saved, every storage
+   request and error, garbage from the program, serial echo, a TCP client, card
+   changes, configuration;
+4b. the real cartridges again with the built-in host, on cards that were never
+   formatted, and a console program over `serial:stdio` and `serial:tcp`;
+5. the host's menu, cut out of the patched `GUI.cpp` and driven by synthetic clicks on
+   the real Dear ImGui (assertions on).
 
 The Vircon32 tools are built from the source tree if `V32TOOLS` is not set (this needs
 only `g++`; SDL2 is replaced by a small stand-in, because the tools use it only to
@@ -332,6 +370,9 @@ find their own folder).
   formatted this way is still a valid card (size and signature unchanged). An
   unpatched emulator just sees ordinary card memory, and the program's heartbeat
   check says nobody is listening.
+- With the built-in host (5.1) there is no external process to coordinate with, but the
+  mailbox is then in the emulator's memory only: it is not in the card file, so
+  `v32dev.py` cannot reach it. Use one host or the other on a card, not both.
 - Savestates do not appear to include the card (the emulator's savestate code has no
   card handling), so loading one can rewind the program but not the mailbox. The
   state of a channel is kept in the card (indices, sessions) rather than in the

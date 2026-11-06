@@ -15,10 +15,22 @@
 #                  real host tool (`v32dev.py serve`) in a separate process: images
 #                  read and written and checked on both sides, no host, wrong device,
 #                  a host that crashes and returns, a stream bigger than the ring
+#
+# When the tree also has emulator/v32dev-server applied (ConsoleLogic/V32DevServer.hpp
+# exists), these are added:
+#   1b. dev_server_unit  the embedded server on the real console classes: specs, a
+#                  mailbox that exists only in memory, what is and is not saved,
+#                  storage requests and errors, serial echo and tcp, card changes,
+#                  configuration through the environment
+#   4b. the same real cartridges against the server built in (env V32DEV_SERVER and
+#                  V32DEV_CH0..3, on cards that were never formatted), plus a console
+#                  cartridge over serial:stdio and serial:tcp
+#   5.  the server's menu: the code of the patched GUI.cpp, cut out and run on the real
+#                  Dear ImGui (assertions on) with synthetic clicks; no SDL2/OpenGL needed
 # Note: 3 shows that the whole thing works under load; the ordering and carve-out
 # guarantees themselves are checked deterministically by 1 and 2.
 #
-# usage: tests/v32dev/run.sh <ComputerSoftware dir with v32dev.patch applied> [workdir] [e2e runs]
+# usage: tests/v32dev/run.sh <ComputerSoftware dir with v32dev.patch (and v32dev-server.patch) applied> [workdir] [e2e runs]
 # env:   V32TOOLS=<folder with compile, assemble, packrom and include/> to use installed
 #        Vircon32 tools; otherwise they are built from the given source tree (g++ only)
 set -e
@@ -28,6 +40,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 W=${2:-$(mktemp -d)}
 RUNS=${3:-5}
 CL=$SRC/DesktopEmulator/ConsoleLogic
+SERVER=no
+[ -f "$CL/V32DevServer.hpp" ] && SERVER=yes
 mkdir -p "$W/obj" "$W/tmp"
 W=$(cd "$W" && pwd)
 
@@ -41,6 +55,12 @@ done
 
 echo "== 1. unit tests"
 TEST_TMPDIR="$W/tmp" "$W/dev_unit"
+
+if [ $SERVER = yes ]; then
+    echo "== 1b. embedded server unit tests"
+    g++ -std=c++11 -O1 -I"$CL" -I"$CL/.." "$HERE/dev_server_unit.cpp" "$W"/obj/*.o -o "$W/dev_server_unit"
+    TEST_TMPDIR="$W/tmp" "$W/dev_server_unit"
+fi
 
 if [ "$(uname)" = "Linux" ]; then
     echo "== 2. write-order test"
@@ -63,5 +83,11 @@ else
 fi
 "$HERE/rom/build-roms.sh" "$TC" "$HERE/../../lib/v32dev" "$W/roms"
 g++ -std=c++11 -O1 -I"$CL" -I"$CL/.." "$HERE/dev_rom_runner.cpp" "$W"/obj/*.o -o "$W/dev_rom_runner"
-python3 -I "$HERE/dev_rom_test.py" "$W/dev_rom_runner" "$W/roms/bios.v32" "$W/roms/carts" "$W/tmp/rom"
+EXTRA=""
+[ $SERVER = yes ] || EXTRA="--no-embedded"
+python3 -I "$HERE/dev_rom_test.py" "$W/dev_rom_runner" "$W/roms/bios.v32" "$W/roms/carts" "$W/tmp/rom" $EXTRA
+if [ $SERVER = yes ]; then
+    echo "== 5. the v32dev server menu, on the real Dear ImGui"
+    "$HERE/gui/build-gui-test.sh" "$SRC" "$W"
+fi
 echo "ALL TESTS PASSED"

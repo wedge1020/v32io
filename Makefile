@@ -140,14 +140,16 @@ test:
 #           emulator device test).
 #   v32dev: the patched console and the host tool. Needs the Vircon32 sources
 #           with emulator/v32dev/v32dev.patch applied: set
-#           COMPUTERSOFTWARE=<that folder> (see tests/v32dev/run.sh).
+#           COMPUTERSOFTWARE=<that folder> (see tests/v32dev/run.sh). If
+#           emulator/v32dev-server/v32dev-server.patch is applied too, the host
+#           built into the emulator is tested as well.
 realcheck: $(addprefix realcheck-,$(COMPONENT_LIST))
 
 realcheck-v32io:
 	sh tests/v32io/run.sh
 
 realcheck-v32dev:
-	@[ -n "$(COMPUTERSOFTWARE)" ] || { echo "set COMPUTERSOFTWARE=<ComputerSoftware folder with emulator/v32dev/v32dev.patch applied>" >&2; exit 2; }
+	@[ -n "$(COMPUTERSOFTWARE)" ] || { echo "set COMPUTERSOFTWARE=<ComputerSoftware folder with emulator/v32dev/v32dev.patch (and v32dev-server.patch) applied>" >&2; exit 2; }
 	bash tests/v32dev/run.sh "$(COMPUTERSOFTWARE)"
 
 # ----------------------------------------------------------------------------

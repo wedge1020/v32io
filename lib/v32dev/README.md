@@ -39,7 +39,7 @@ reads and writes card memory.
 | Layer | Where | What it does |
 | --- | --- | --- |
 | Transport | `emulator/v32dev/v32dev.patch` | keeps the mailbox in sync with the file, in an order that is safe to read |
-| Device core | `v32dev.h`, `tools/v32dev.py` | channels, device types (class and kind), opening, liveness, streams and messages |
+| Device core | `v32dev.h`, `tools/v32dev.py` (or the host built into the emulator by `emulator/v32dev-server/v32dev-server.patch`) | channels, device types (class and kind), opening, liveness, streams and messages |
 | Device drivers | `storage.h`, `serial.h` (later `network.h`, `netplay.h`) | what a class of device means (sectors, characters, connections) |
 
 A request and its reply take at least one frame (the host only sees what the
@@ -85,6 +85,10 @@ restarted).
    `cd ComputerSoftware && patch -p0 < v32dev.patch` (try `--dry-run` first).
    It touches only `DesktopEmulator/ConsoleLogic/V32Console.{cpp,hpp}` and
    `V32MemoryCardController.{cpp,hpp}`. See `emulator/v32dev/README.md`.
+   To have the emulator serve the card itself (steps 2 and 3 below are then done
+   from its **Memory card → v32dev server** menu, on any card), also apply
+   `emulator/v32dev-server/v32dev-server.patch` on top of it: see
+   `emulator/v32dev-server/README.md`.
 2. Format a card and serve a file on it (a text file, in byte mode, one
    character per word):
 

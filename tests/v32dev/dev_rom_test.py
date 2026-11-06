@@ -8,10 +8,18 @@ The program tells what it observed through a report it writes in the card (words
 65 and following); this test reads it and compares with what the host knows. The
 host also checks the contents of the images the program wrote.
 
-usage: dev_rom_test.py <runner> <bios.v32> <directory with the compiled *_test.v32 carts> <workdir> [--realtime]
+The same scenarios also run against the host built into the emulator (the
+v32dev server of emulator/v32dev-server, configured with the V32DEV_SERVER and
+V32DEV_CH0..3 environment variables) on a card that was never formatted, and the
+console scenarios use its serial:stdio and serial:tcp devices. Pass --no-embedded
+to leave those out (a console without the v32dev-server patch has none).
+
+usage: dev_rom_test.py <runner> <bios.v32> <directory with the compiled *_test.v32 carts> <workdir> [--realtime] [--no-embedded]
 """
 import os
+import select
 import signal
+import socket
 import struct
 import subprocess
 import sys
@@ -98,7 +106,7 @@ class Env:
         raise RuntimeError("host did not start")
 
     def stop(self, proc):
-        if proc.poll() is None:
+        if proc is not None and proc.poll() is None:
             proc.send_signal(signal.SIGINT)
             try:
                 proc.wait(5)
@@ -111,6 +119,20 @@ class Env:
         p = subprocess.run([self.runner, self.bios, os.path.join(self.cartdir, cart + ".v32"), card, str(micros), str(frames)],
                            capture_output=True, text=True, env=e, timeout=timeout)
         return p.returncode, p.stdout.strip()
+
+    def embedded(self, *specs):
+        """The environment that makes the console serve the given (channel, spec) pairs itself."""
+        e = {"V32DEV_SERVER": "1"}
+        for ch, spec in specs:
+            e["V32DEV_CH%d" % ch] = spec
+        return e
+
+    def region_untouched(self, card):
+        """The mailbox of an embedded server never reaches the card file."""
+        c = v32dev.Card(card)
+        words = c.read_words(v32dev.REGION_START, v32dev.REGION_WORDS)
+        c.close()
+        return not any(words)
 
     def run_bg(self, card, micros=2000, frames=20000):
         return subprocess.Popen([self.runner, self.bios, self.cart, card, str(micros), str(frames)],
@@ -128,14 +150,20 @@ def read_word_image(path):
 
 
 # ----------------------------------------------------------------------------
-def test_rw(env, micros):
-    print("scenario 1: read and write a word mode image (%d us per frame)" % micros)
+def test_rw(env, micros, embedded=False):
+    print("scenario 1: read and write a word mode image (%d us per frame%s)" % (micros, ", embedded server" if embedded else ""))
     img = env.path("disk.img")
     make_word_image(img, 64)
-    card = env.make_card(1, {1: v32dev.TYPES["storage"]})
-    host = env.serve(card, (1, "storage:%s" % img))
-    code, out = env.run(card, micros=micros)
-    env.stop(host)
+    if embedded:
+        card = env.make_card(1, format=False)
+        host = None
+        code, out = env.run(card, micros=micros, env=env.embedded((1, "storage:%s" % img)))
+        check(env.region_untouched(card), "the card file has no trace of the mailbox")
+    else:
+        card = env.make_card(1, {1: v32dev.TYPES["storage"]})
+        host = env.serve(card, (1, "storage:%s" % img))
+        code, out = env.run(card, micros=micros)
+        env.stop(host)
     print("  runner:", out)
     check(code == 0, "program ended normally")
     r = env.report(card)
@@ -169,17 +197,21 @@ def test_rw(env, micros):
     return r
 
 
-def test_bytes(env):
-    print("scenario 2: byte mode, read only image")
+def test_bytes(env, embedded=False):
+    print("scenario 2: byte mode, read only image%s" % (" (embedded server)" if embedded else ""))
     img = env.path("text.img")
     text = b"Hello from the host!\nline two\n"
     with open(img, "wb") as f:
         f.write(text + bytes((i * 7) & 255 for i in range(16 * 512 - len(text))))
     before = open(img, "rb").read()
-    card = env.make_card(2, {1: v32dev.TYPES["storage"]})
-    host = env.serve(card, (1, "storage:%s,bytes,ro" % img))
-    code, out = env.run(card)
-    env.stop(host)
+    if embedded:
+        card = env.make_card(2, format=False)
+        code, out = env.run(card, env=env.embedded((1, "storage:%s,bytes,ro" % img)))
+    else:
+        card = env.make_card(2, {1: v32dev.TYPES["storage"]})
+        host = env.serve(card, (1, "storage:%s,bytes,ro" % img))
+        code, out = env.run(card)
+        env.stop(host)
     check(code == 0, "program ended normally: " + out)
     r = env.report(card)
     check(r[3:8] == [512, 16, 1, 1, 3], "geometry: %s" % r[3:8])
@@ -250,12 +282,16 @@ def test_survive(env):
     check(after >= 20, "reads worked again after the host came back (%d)" % after)
 
 
-def test_serial(env):
-    print("scenario 8: serial (character device): 5000 words each way, in a stream")
-    card = env.make_card(8, {2: v32dev.TYPES["serial"]})
-    host = env.serve(card, (2, "serial:echo,hup=5006"))
-    code, out = env.run(card, cart="serial_test", frames=20000)
-    env.stop(host)
+def test_serial(env, embedded=False):
+    print("scenario 8: serial (character device): 5000 words each way, in a stream%s" % (" (embedded server)" if embedded else ""))
+    if embedded:
+        card = env.make_card(8, format=False)
+        code, out = env.run(card, cart="serial_test", frames=20000, env=env.embedded((2, "serial:echo,hup=5006")))
+    else:
+        card = env.make_card(8, {2: v32dev.TYPES["serial"]})
+        host = env.serve(card, (2, "serial:echo,hup=5006"))
+        code, out = env.run(card, cart="serial_test", frames=20000)
+        env.stop(host)
     print("  runner:", out)
     check(code == 0, "program ended normally")
     r = env.report(card)
@@ -269,21 +305,171 @@ def test_serial(env):
     check(r[12] == 1 and r[13] == 0, "host hung up once everything had been echoed (hup=%d, read %d)" % (r[12], r[13]))
 
 
-def test_demo(env):
-    print("scenario 9: the storage demo (lib/v32dev/demos/storage.c) browsing a host text file")
+def test_demo(env, embedded=False):
+    print("scenario 9: the storage demo (lib/v32dev/demos/storage.c) browsing a host text file%s" % (" (embedded server)" if embedded else ""))
     img = env.path("notes.txt")
     with open(img, "wb") as f:
         f.write(b"Hello from the host!\n" * 200)
-    card = env.make_card(9, {0: v32dev.TYPES["storage"]})
-    host = env.serve(card, (0, "storage:%s,bytes" % img))
+    e = dict(os.environ)
+    if embedded:
+        card = env.make_card(9, format=False)
+        host = None
+        e.update(env.embedded((0, "storage:%s,bytes" % img)))
+    else:
+        card = env.make_card(9, {0: v32dev.TYPES["storage"]})
+        host = env.serve(card, (0, "storage:%s,bytes" % img))
     p = subprocess.run([env.runner, env.bios, os.path.join(env.cartdir, "..", "demos", "storage.v32"), card, "2000", "300"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=e)
     env.stop(host)
     # it never ends by itself: reaching the frame limit (exit 3) means it ran without a hardware error
     check(p.returncode == 3, "demo ran for 300 frames without a hardware error: " + p.stdout.strip())
+    if embedded:
+        check(env.region_untouched(card), "the card file has no trace of the mailbox")
+    else:
+        c = v32dev.Card(card)
+        check(c.read_word(v32dev.cart_part(0) + v32dev.CP_FLAGS) & 1 == 1, "demo opened the channel")
+        c.close()
+
+
+def test_embedded_states(env):
+    print("scenario 3-6, embedded server: what the program sees when the server can't or doesn't serve")
+    # enabled, nothing configured on the channel
+    card = env.make_card(3, format=False)
+    code, out = env.run(card, frames=3000, env=env.embedded())
+    r = env.report(card)
+    check(code == 0 and r[1] == 99 and r[40] == NOHOST and r[41] == 0, "nothing on the channel: state %d (NOHOST)" % r[40])
+
+    # not enabled: an ordinary card
+    card = env.make_card(4, format=False)
+    code, out = env.run(card, frames=3000)
+    r = env.report(card)
+    check(code == 0 and r[40] == NOEMU, "server off: state %d (NOEMU)" % r[40])
+
+    # enabled, but the feature is disabled for the process
+    img = env.path("disk.img")
+    make_word_image(img, 4)
+    card = env.make_card(5, format=False)
+    e = env.embedded((1, "storage:%s" % img))
+    e["V32DEV_DISABLE"] = "1"
+    code, out = env.run(card, frames=3000, env=e)
+    r = env.report(card)
+    check(code == 0 and r[40] == NOEMU, "V32DEV_DISABLE set: state %d (NOEMU)" % r[40])
+
+    # a device of another class on the channel
+    card = env.make_card(6, format=False)
+    code, out = env.run(card, frames=3000, env=env.embedded((1, "serial:echo")))
+    r = env.report(card)
+    check(code == 0 and r[40] == WRONG and r[41] == 0, "serial device where a block device was expected: state %d (WRONG)" % r[40])
+
+    # a card whose last 64 KiB hold the program's own data: the server leaves it alone
+    card = env.make_card(10, format=False)          # (7 would be the long 'survive' scenario)
     c = v32dev.Card(card)
-    check(c.read_word(v32dev.cart_part(0) + v32dev.CP_FLAGS) & 1 == 1, "demo opened the channel")
+    c.write_word(v32dev.REGION_START + 10, 0x1234)
     c.close()
+    code, out = env.run(card, frames=3000, env=env.embedded((1, "storage:%s" % img)))
+    r = env.report(card)
+    check(code == 0 and r[40] == NOEMU, "card with data in the region: state %d (NOEMU)" % r[40])
+    c = v32dev.Card(card)
+    check(c.read_word(v32dev.REGION_START + 10) == 0x1234, "that data is still there")
+    c.close()
+
+
+def read_until(fd, needle, timeout):
+    """Reads from a file descriptor until needle (bytes) shows up. Returns what was read."""
+    data = b""
+    end = time.time() + timeout
+    while needle not in data and time.time() < end:
+        if select.select([fd], [], [], 0.05)[0]:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            data += chunk
+    return data
+
+
+def free_port():
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def listening_on_loopback_only(port):
+    """Linux: the socket in /proc/net/tcp must be bound to 127.0.0.1."""
+    try:
+        lines = open("/proc/net/tcp").read().splitlines()[1:]
+    except OSError:
+        return True
+    found = [l.split()[1] for l in lines if l.split()[3] == "0A" and int(l.split()[1].split(":")[1], 16) == port]
+    return bool(found) and all(a.startswith("0100007F") for a in found)
+
+
+def check_console_report(r, channel_class_ok=True):
+    check(r[1] == 99 and r[2] == 1, "channel became ready")
+    check(r[3] == v32dev.CLASS_CHAR, "class char")
+    check(r[4] == 5 and r[5] == 1 and r[16:21] == [112, 105, 110, 103, 10], "the program read the line 'ping': %s" % r[16:21])
+    check(r[6] == 1, "the program saw the hang up")
+
+
+def test_console_stdio(env):
+    print("scenario 10, embedded server: serial:stdio (the terminal the emulator runs in)")
+    card = env.make_card(2, format=False)
+    e = dict(os.environ)
+    e.update(env.embedded((2, "serial:stdio")))
+    p = subprocess.Popen([env.runner, env.bios, os.path.join(env.cartdir, "console_test.v32"), card, "2000", "6000"],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=e)
+    out = read_until(p.stdout.fileno(), b"READY\n", 20)
+    check(b"READY\n" in out, "the program's prompt reached our stdout")
+    p.stdin.write(b"ping\n")
+    p.stdin.flush()
+    out += read_until(p.stdout.fileno(), b"echo:ping\n", 20)
+    check(b"echo:ping\n" in out, "the program's answer reached our stdout")
+    p.stdin.close()                       # end of input: the program is hung up on
+    try:
+        rest, _ = p.communicate(timeout=60)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        rest = b"timeout"
+    check(p.returncode == 0, "program ended normally: " + (out + rest).decode(errors="replace").strip()[-80:])
+    check_console_report(env.report(card))
+    check(env.region_untouched(card), "the card file has no trace of the mailbox")
+
+
+def test_console_tcp(env):
+    print("scenario 11, embedded server: serial:tcp (a client on this computer)")
+    port = free_port()
+    card = env.make_card(2, format=False)
+    e = dict(os.environ)
+    e.update(env.embedded((2, "serial:tcp=%d" % port)))
+    p = subprocess.Popen([env.runner, env.bios, os.path.join(env.cartdir, "console_test.v32"), card, "2000", "6000"],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=e)
+    sock = None
+    end = time.time() + 20
+    while sock is None and time.time() < end:
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=1)
+        except OSError:
+            time.sleep(0.05)
+    check(sock is not None, "connected to the server's port")
+    check(listening_on_loopback_only(port), "the port listens on 127.0.0.1 only")
+    if sock is None:
+        p.kill()
+        return
+    out = read_until(sock.fileno(), b"READY\n", 20)
+    check(b"READY\n" in out, "the program's prompt arrived")
+    sock.sendall(b"ping\n")
+    out += read_until(sock.fileno(), b"echo:ping\n", 20)
+    check(b"echo:ping\n" in out, "the program's answer arrived")
+    sock.close()                          # the other end goes away: the program is hung up on
+    try:
+        rest, _ = p.communicate(timeout=60)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        rest = b"timeout"
+    check(p.returncode == 0, "program ended normally: " + rest.decode(errors="replace").strip()[-80:])
+    check_console_report(env.report(card))
+    check(env.region_untouched(card), "the card file has no trace of the mailbox")
 
 
 def main():
@@ -295,8 +481,18 @@ def main():
     test_survive(env)
     test_serial(env)
     test_demo(env)
+    if "--no-embedded" not in sys.argv:
+        test_rw(env, 2000, embedded=True)
+        test_bytes(env, embedded=True)
+        test_embedded_states(env)
+        test_serial(env, embedded=True)
+        test_demo(env, embedded=True)
+        test_console_stdio(env)
+        test_console_tcp(env)
     if "--realtime" in sys.argv:
         test_rw(env, 16667)
+        if "--no-embedded" not in sys.argv:
+            test_rw(env, 16667, embedded=True)
     print("real cartridge tests: %d checks, %d failures" % (checks, failures))
     return 1 if failures else 0
 

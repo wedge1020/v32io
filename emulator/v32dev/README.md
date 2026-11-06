@@ -35,3 +35,7 @@ What it does (details in `docs/v32dev/PROTOCOL.md`, section 2):
 - A card without the header behaves exactly as before.
 
 `mkpatch.sh <pristine tree> <patched tree>` regenerates the patch.
+
+The host (`tools/v32dev.py`) is a separate program. To have the emulator serve
+the card itself, from its Memory card menu, apply `../v32dev-server/v32dev-server.patch`
+on top of this one: see `../v32dev-server/README.md`.
