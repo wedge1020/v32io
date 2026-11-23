@@ -43,7 +43,7 @@ uint8_t const* tud_descriptor_device_cb( void )
 static uint8_t const desc_hid_report[] =
 {
     HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP     ),
-    HID_USAGE      ( HID_USAGE_DESKTOP_GAMEPAD  ),
+    HID_USAGE      ( HID_USAGE_DESKTOP_JOYSTICK ),
     HID_COLLECTION ( HID_COLLECTION_APPLICATION ),
 
       // 16 buttons: the 11 v32io controls are 1-11, 12-16 are never pressed.
