@@ -48,12 +48,13 @@ typedef enum
 }
 v32io_mode_t;
 
-// report sent to the PC: 11 buttons, plus 2 axes that never move
-// (they are only there so that every OS takes this for a gamepad)
+// report sent to the PC: 11 buttons (of 16), plus a hat and 2 sticks that
+// never move (they are only there so that every OS takes this for a gamepad)
 typedef struct __attribute__((packed))
 {
     uint16_t buttons;
-    int8_t   x, y;
+    uint8_t  hat;               // 8 = centered
+    uint8_t  x, y, z, rz;       // 128 = centered
 }
 v32io_report_t;
 

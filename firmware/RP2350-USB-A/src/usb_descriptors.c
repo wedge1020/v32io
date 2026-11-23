@@ -39,36 +39,51 @@ uint8_t const* tud_descriptor_device_cb( void )
     return (uint8_t const*) &desc_device;
 }
 
-// ---------------- HID report descriptor: gamepad with 11 buttons + X/Y
+// ---------------- HID report descriptor: gamepad with 16 buttons (11 used), hat and 2 sticks
 static uint8_t const desc_hid_report[] =
 {
     HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP     ),
     HID_USAGE      ( HID_USAGE_DESKTOP_GAMEPAD  ),
     HID_COLLECTION ( HID_COLLECTION_APPLICATION ),
 
-      // 11 buttons
+      // 16 buttons: the 11 v32io controls are 1-11, 12-16 are never pressed.
+      // (A usual pad has 12-16 buttons; many OS profiles expect that.)
       HID_USAGE_PAGE   ( HID_USAGE_PAGE_BUTTON ),
       HID_USAGE_MIN    ( 1                     ),
-      HID_USAGE_MAX    ( V32BTN_COUNT          ),
+      HID_USAGE_MAX    ( 16                    ),
       HID_LOGICAL_MIN  ( 0                     ),
       HID_LOGICAL_MAX  ( 1                     ),
       HID_REPORT_SIZE  ( 1                     ),
-      HID_REPORT_COUNT ( V32BTN_COUNT          ),
+      HID_REPORT_COUNT ( 16                    ),
       HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ),
 
-      // padding up to 16 bits
-      HID_REPORT_SIZE  ( 16 - V32BTN_COUNT     ),
-      HID_REPORT_COUNT ( 1                     ),
+      // Hat switch (D-pad), never moved: 8 = no direction (null state)
+      HID_USAGE_PAGE   ( HID_USAGE_PAGE_DESKTOP ),
+      HID_USAGE        ( HID_USAGE_DESKTOP_HAT_SWITCH ),
+      HID_LOGICAL_MIN  ( 0                      ),
+      HID_LOGICAL_MAX  ( 7                      ),
+      HID_PHYSICAL_MIN ( 0                      ),
+      HID_PHYSICAL_MAX_N ( 315, 2               ),
+      HID_UNIT         ( 0x14                   ),   // degrees
+      HID_REPORT_SIZE  ( 4                      ),
+      HID_REPORT_COUNT ( 1                      ),
+      HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE | HID_NULL_STATE ),
+      HID_REPORT_SIZE  ( 4                      ),
+      HID_REPORT_COUNT ( 1                      ),
       HID_INPUT        ( HID_CONSTANT | HID_VARIABLE | HID_ABSOLUTE ),
 
-      // X and Y axes (always centered)
-      HID_USAGE_PAGE   ( HID_USAGE_PAGE_DESKTOP ),
+      // 2 sticks (X/Y and Z/Rz), never moved: 0..255, centered at 128
+      HID_PHYSICAL_MIN ( 0                      ),
+      HID_PHYSICAL_MAX ( 0                      ),
+      HID_UNIT         ( 0                      ),
       HID_USAGE        ( HID_USAGE_DESKTOP_X    ),
       HID_USAGE        ( HID_USAGE_DESKTOP_Y    ),
-      HID_LOGICAL_MIN  ( 0x81                   ),   // -127
-      HID_LOGICAL_MAX  ( 0x7F                   ),   //  127
+      HID_USAGE        ( HID_USAGE_DESKTOP_Z    ),
+      HID_USAGE        ( HID_USAGE_DESKTOP_RZ   ),
+      HID_LOGICAL_MIN  ( 0                      ),
+      HID_LOGICAL_MAX_N ( 255, 2                ),
       HID_REPORT_SIZE  ( 8                      ),
-      HID_REPORT_COUNT ( 2                      ),
+      HID_REPORT_COUNT ( 4                      ),
       HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ),
 
     HID_COLLECTION_END
