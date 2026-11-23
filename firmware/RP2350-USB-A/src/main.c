@@ -303,7 +303,7 @@ static void report_task( void )
     if( !tud_hid_ready() )
       return;
 
-    v32io_report_t report = { .buttons = buttons, .hat = 8, .x = 128, .y = 128, .z = 128, .rz = 128 };
+    v32io_report_t report = { .buttons = buttons, .x = 0, .y = 0 };
 
     if( tud_hid_report( 0, &report, sizeof(report) ) )
     {
@@ -361,7 +361,7 @@ uint16_t tud_hid_get_report_cb( uint8_t instance, uint8_t report_id, hid_report_
 {
     (void) instance; (void) report_id; (void) report_type;
 
-    v32io_report_t report = { .buttons = buttons_sent, .hat = 8, .x = 128, .y = 128, .z = 128, .rz = 128 };
+    v32io_report_t report = { .buttons = buttons_sent, .x = 0, .y = 0 };
 
     if( reqlen < sizeof(report) )
       return 0;
